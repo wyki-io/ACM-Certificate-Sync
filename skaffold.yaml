@@ -1,11 +1,13 @@
 apiVersion: skaffold/v2beta4
 kind: Config
 metadata:
-  name: cert-manager-acm-sync
+  name: acm-certificate-sync
 build:
   artifacts:
-  - image: cert-manager-acm-sync
+    - image: acm-certificate-sync
+      docker:
+        dockerfile: docker/Dockerfile
 deploy:
   kubectl:
     manifests:
-    - deployment.yaml
+      - deployment.yaml
