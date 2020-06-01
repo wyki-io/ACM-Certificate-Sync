@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cert-manager-acm-sync
+spec:
+  selector:
+    matchLabels:
+      app: cert-manager-acm-sync
+  template:
+    metadata:
+      labels:
+        app: cert-manager-acm-sync
+    spec:
+      containers:
+        - name: cert-manager-acm-sync
+          image: cert-manager-acm-sync
+          resources:
+            limits:
+              memory: '64Mi'
+              cpu: '200m'
+          ports:
+            - containerPort: 3030
