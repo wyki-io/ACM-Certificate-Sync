@@ -1,4 +1,4 @@
-# ACM Certificate Sync
+# ACM Certificate Synchronization
 
 This project aims to synchronize your Kubernetes cluster certificates into AWS
 ACM.

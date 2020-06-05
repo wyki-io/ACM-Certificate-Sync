@@ -3,6 +3,9 @@ name = "acs"
 version = "0.1.0"
 authors = ["Wykiki <wykiki@wyki.io>"]
 edition = "2018"
+keywords = ["kubernetes", "certificate", "ssl", "tls", "aws", "acm"]
+readme = "README.md"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,3 +18,6 @@ tokio = { version = "0.2", features = ["macros"] }
 futures = "0.3.4"
 anyhow = "1.0.28"
 env_logger = "0.7.1"
+
+[dev-dependencies]
+futures-await-test = "0.3.0"
