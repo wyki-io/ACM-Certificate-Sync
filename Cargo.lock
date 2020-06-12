@@ -22,6 +22,7 @@ dependencies = [
  "kube",
  "kube-derive",
  "log",
+ "serde_yaml",
  "tokio",
 ]
 
