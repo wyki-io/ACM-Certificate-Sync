@@ -10,9 +10,26 @@ use kube::{
 
 use futures::{StreamExt, TryStreamExt};
 
+pub struct TLS {
+    pub key: String,
+    pub cert: String,
+    pub ca: String,
+    pub chain: String
+}
+pub struct AcmHandler {}
+
+pub trait Provider {
+    fn publish();
+}
+
+pub trait Receiver {
+    fn receive();
+}
+
 pub async fn run() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "info,kube=debug");
     env_logger::init();
+    info!("Hello from lib");
     let client = Client::try_default().await?;
 
     let secrets: Api<Secret> = Api::all(client);
