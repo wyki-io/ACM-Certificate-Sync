@@ -25,11 +25,11 @@ pub struct TLS {
 impl TLS {
     pub fn new(domain: String, key: String, cert: String, ca: String, chain: String) -> Self {
         TLS {
-            domain: domain,
-            key: key,
-            cert: cert,
-            ca: ca,
-            chain: chain,
+            domain,
+            key,
+            cert,
+            ca,
+            chain,
         }
     }
 }
