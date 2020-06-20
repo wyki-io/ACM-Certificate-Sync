@@ -1,22 +1,39 @@
-#[macro_use] extern crate log;
-use acs::run;
+#[macro_use]
+extern crate log;
+use acs::{run, Provider, Receiver, TLS};
 
-use std::{thread, time};
+use std::{
+    sync::{Arc, RwLock},
+    thread, time,
+};
+use tokio::runtime::{Builder, Runtime};
 
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
-    api::{Api, DeleteParams, ListParams, PostParams, Meta},
-    runtime::Informer,
+    api::{Api, DeleteParams, ListParams, Meta, PostParams},
     Client,
 };
 
 // use futures::executor::spawn;
-use futures::{StreamExt, TryStreamExt};
-use futures_await_test::async_test;
 
-use std::path::Path;
+pub struct TestReceiver {}
 
-use serde_yaml::from_reader;
+impl Receiver for TestReceiver {
+    fn receive() -> TLS {
+        todo!()
+    }
+}
+
+pub struct TestProvider {
+    pub tls: Arc<RwLock<TLS>>,
+}
+
+impl Provider for TestProvider {
+    fn publish(&self, tls: TLS) {
+        let mut tls_write = self.tls.write().unwrap();
+        *tls_write = tls;
+    }
+}
 
 async fn init_client() -> Client {
     Client::try_default()
@@ -50,9 +67,8 @@ async fn add_certificate(client: &Client, file: &str) {
     // let path = Path::new(file);
     // dbg!(path);
     // let file = std::fs::File::open(&path).expect("Unable to open certificate file");
-    let tls_secret: Secret =
-        serde_yaml::from_str(file).expect("Unable to read file as YAML");
-        // serde_yaml::from_reader(file).expect("Unable to convert certificate file to yaml");
+    let tls_secret: Secret = serde_yaml::from_str(file).expect("Unable to read file as YAML");
+    // serde_yaml::from_reader(file).expect("Unable to convert certificate file to yaml");
     let secrets: Api<Secret> = Api::namespaced(client.clone(), "default");
     let post_params = PostParams::default();
     match secrets.create(&post_params, &tls_secret).await {
@@ -61,38 +77,48 @@ async fn add_certificate(client: &Client, file: &str) {
             assert_eq!(Meta::name(&tls_secret), name);
             info!("Created {}", name);
             // wait for it..
-            std::thread::sleep(std::time::Duration::from_millis(1_000));
-        },
+            // std::thread::sleep(std::time::Duration::from_millis(1_000));
+        }
         Err(kube::Error::Api(ae)) => {
             dbg!(ae);
             ()
-        }, // if you skipped delete, for instance
+        } // if you skipped delete, for instance
         Err(e) => {
             dbg!("something bad happened {}", e);
             ()
-        },
+        }
     }
 }
 
-// async fn launch_app() -> thread::JoinHandle<> {
-//     // async fn launch_app() {
-//     thread::spawn(|| async {
-//         run().await;
-//     })
-// }
-
 #[tokio::test]
 async fn create_certificate() {
+    let tls = Arc::new(RwLock::new(TLS::new(
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+    )));
+    // It currently tests with an existing Kubernetes cluster
+    let receiver = TestReceiver {};
+    let provider = TestProvider { tls: tls.clone() };
+    tokio::spawn(run(receiver, provider));
+
     let client = init_client().await;
     delete_certificates(&client).await;
-    // launch_app();
-    tokio::spawn(run());
 
-    let one_sec = time::Duration::from_secs(1);
+    let kube_secret_file_path = include_str!("./resources/certificate.yaml");
+    add_certificate(&client, kube_secret_file_path).await;
+    let tls_read = tls.read().unwrap();
+    let kube_tls_secret: Secret =
+        serde_yaml::from_str(kube_secret_file_path).expect("Unable to read file as YAML");
+    assert_eq!(get_data(&kube_tls_secret, "tls.crt"), tls_read.cert);
+    assert_eq!(get_data(&kube_tls_secret, "tls.key"), tls_read.key);
+    delete_certificates(&client).await;
+}
 
-    thread::sleep(one_sec);
-
-    add_certificate(&client, include_str!("./resources/certificate.yaml")).await;
-    thread::sleep(one_sec);
-    // run().await;
+/// Extract data value out of a Kubernetes Secret
+fn get_data(secret: &Secret, key: &str) -> String {
+    let value = secret.data.as_ref().unwrap().get(key).unwrap();
+    String::from_utf8(value.0.clone()).unwrap()
 }
