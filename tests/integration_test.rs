@@ -2,11 +2,7 @@
 extern crate log;
 use acs::{run, Provider, Receiver, TLS};
 
-use std::{
-    sync::{Arc, RwLock},
-    thread, time,
-};
-use tokio::runtime::{Builder, Runtime};
+use std::sync::{Arc, RwLock};
 
 use k8s_openapi::api::core::v1::Secret;
 use kube::{

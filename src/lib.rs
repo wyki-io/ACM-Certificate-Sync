@@ -12,7 +12,6 @@ use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::ByteString;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
-use std::convert::TryInto;
 
 #[derive(Debug, Default)]
 pub struct TLS {
