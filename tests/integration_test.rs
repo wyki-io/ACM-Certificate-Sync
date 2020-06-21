@@ -10,8 +10,6 @@ use kube::{
     Client,
 };
 
-// use futures::executor::spawn;
-
 pub struct TestReceiver {}
 
 impl Receiver for TestReceiver {
@@ -31,12 +29,14 @@ impl Provider for TestProvider {
     }
 }
 
+/// Creates a Kubernetes client
 async fn init_client() -> Client {
     Client::try_default()
         .await
         .expect("Unabled to create client")
 }
 
+/// Deletes all certificates from Kubernetes
 async fn delete_certificates(client: &Client) {
     let secrets: Api<Secret> = Api::all(client.clone());
     let lp = ListParams::default();
@@ -59,6 +59,8 @@ async fn delete_certificates(client: &Client) {
     }
 }
 
+/// Send given secret to Kubernetes
+/// It expects a certificate secret, but do not check it
 async fn add_certificate(client: &Client, file: &str) {
     // let path = Path::new(file);
     // dbg!(path);
@@ -86,7 +88,7 @@ async fn add_certificate(client: &Client, file: &str) {
     }
 }
 
-#[tokio::test]
+#[tokio::test(threaded_scheduler)]
 async fn create_certificate() {
     let tls = Arc::new(RwLock::new(TLS::new(
         String::new(),
@@ -100,16 +102,24 @@ async fn create_certificate() {
     let provider = TestProvider { tls: tls.clone() };
     tokio::spawn(run(receiver, provider));
 
+    // Pre test cleanup
     let client = init_client().await;
     delete_certificates(&client).await;
 
     let kube_secret_file_path = include_str!("./resources/certificate.yaml");
     add_certificate(&client, kube_secret_file_path).await;
+
+    // Sleep so that the server have time to receive the secret and compute it
+    // Pretty ugly but haven't find a better way of handling it
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
     let tls_read = tls.read().unwrap();
     let kube_tls_secret: Secret =
         serde_yaml::from_str(kube_secret_file_path).expect("Unable to read file as YAML");
     assert_eq!(get_data(&kube_tls_secret, "tls.crt"), tls_read.cert);
     assert_eq!(get_data(&kube_tls_secret, "tls.key"), tls_read.key);
+
+    // Post test cleanup
     delete_certificates(&client).await;
 }
 
