@@ -1,9 +1,13 @@
+extern crate env_logger;
+extern crate rusoto_core;
+extern crate rusoto_elbv2;
 #[macro_use]
 extern crate log;
 use acs::{run, Provider, Receiver, TLS};
 
 use std::sync::{Arc, RwLock};
 
+use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::{Api, DeleteParams, ListParams, Meta, PostParams},
@@ -22,8 +26,9 @@ pub struct TestProvider {
     pub tls: Arc<RwLock<TLS>>,
 }
 
+#[async_trait]
 impl Provider for TestProvider {
-    fn publish(&self, tls: TLS) {
+    async fn publish(&self, tls: TLS) {
         let mut tls_write = self.tls.write().unwrap();
         *tls_write = tls;
     }
@@ -88,14 +93,19 @@ async fn add_certificate(client: &Client, file: &str) {
     }
 }
 
+/// Extract data value out of a Kubernetes Secret
+fn get_data(secret: &Secret, key: &str) -> String {
+    let value = secret.data.as_ref().unwrap().get(key).unwrap();
+    String::from_utf8(value.0.clone()).unwrap()
+}
+
 #[tokio::test(threaded_scheduler)]
 async fn create_certificate() {
     let tls = Arc::new(RwLock::new(TLS::new(
         String::new(),
         String::new(),
         String::new(),
-        String::new(),
-        String::new(),
+        Some(String::new()),
     )));
     // It currently tests with an existing Kubernetes cluster
     let receiver = TestReceiver {};
@@ -123,8 +133,15 @@ async fn create_certificate() {
     delete_certificates(&client).await;
 }
 
-/// Extract data value out of a Kubernetes Secret
-fn get_data(secret: &Secret, key: &str) -> String {
-    let value = secret.data.as_ref().unwrap().get(key).unwrap();
-    String::from_utf8(value.0.clone()).unwrap()
-}
+// use rusoto_core::Region;
+// use rusoto_elbv2::{DescribeLoadBalancersInput, Elb, ElbClient};
+
+// #[tokio::test]
+// async fn rusoto_test() {
+//     let _ = env_logger::try_init();
+//     let client = ElbClient::new(Region::EuWest3);
+//     let request = DescribeLoadBalancersInput::default();
+
+//     let result = client.describe_load_balancers(request).await.unwrap();
+//     println!("{:#?}", result);
+// }

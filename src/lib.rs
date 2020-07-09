@@ -1,6 +1,13 @@
 #[macro_use]
 extern crate log;
 
+mod common;
+mod provider;
+
+use anyhow::{anyhow, Context};
+pub use common::TLS;
+pub use provider::{AcmAlbProvider, Provider};
+
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     api::{Api, ListParams, WatchEvent},
@@ -13,56 +20,29 @@ use k8s_openapi::ByteString;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-#[derive(Debug, Default)]
-pub struct TLS {
-    pub domain: String,
-    pub key: String,
-    pub cert: String,
-    pub ca: String,
-    pub chain: String,
-}
-
-impl TLS {
-    pub fn new(domain: String, key: String, cert: String, ca: String, chain: String) -> Self {
-        TLS {
-            domain,
-            key,
-            cert,
-            ca,
-            chain,
-        }
-    }
-}
-
 impl TryFrom<BTreeMap<String, ByteString>> for TLS {
-    type Error = &'static str;
+    type Error = anyhow::Error;
 
     fn try_from(value: BTreeMap<String, ByteString>) -> Result<Self, Self::Error> {
         let cert = match value.get("tls.crt") {
             Some(x) => x,
-            None => return Err("Unable to get cert from secret"),
+            None => return Err(anyhow!("Unable to get cert from secret")),
         };
         let key = match value.get("tls.key") {
             Some(x) => x,
-            None => return Err("Unable to get key from secret"),
+            None => return Err(anyhow!("Unable to get key from secret")),
         };
         let mut tls = TLS::default();
         tls.cert = match String::from_utf8(cert.0.clone()) {
             Ok(x) => x,
-            Err(_) => return Err("Unable to parse the cert from secret"),
+            Err(_) => return Err(anyhow!("Unable to parse the cert from secret")),
         };
         tls.key = match String::from_utf8(key.0.clone()) {
             Ok(x) => x,
-            Err(_) => return Err("Unable to parse the key from secret"),
+            Err(_) => return Err(anyhow!("Unable to parse the key from secret")),
         };
         Ok(tls)
     }
-}
-
-pub struct AcmHandler {}
-
-pub trait Provider {
-    fn publish(&self, tls: TLS);
 }
 
 pub trait Receiver {
@@ -92,17 +72,17 @@ pub async fn run(receiver: impl Receiver, provider: impl Provider) -> anyhow::Re
         let mut secrets = si.poll().await?.boxed();
 
         while let Some(secret) = secrets.try_next().await? {
-            handle_secret(secret, &provider)?;
+            handle_secret(secret, &provider).await?;
         }
     }
 }
 
 // Check if a Certificate
-pub fn handle_secret(ev: WatchEvent<Secret>, provider: &dyn Provider) -> anyhow::Result<()> {
+pub async fn handle_secret(ev: WatchEvent<Secret>, provider: &dyn Provider) -> anyhow::Result<()> {
     let expected_type = String::from("kubernetes.io/tls");
     // dbg!("In handle_secret");
     match ev {
-        WatchEvent::Added(o) => {
+        WatchEvent::Added(o) | WatchEvent::Modified(o) => {
             // dbg!("In secret");
             let secret_type = o.type_.unwrap_or_default();
             if secret_type.eq(&expected_type) {
@@ -112,8 +92,13 @@ pub fn handle_secret(ev: WatchEvent<Secret>, provider: &dyn Provider) -> anyhow:
                 info!("New TLS Secret : {} with type {}", secret_name, secret_type);
                 match o.data {
                     Some(data) => {
-                        match TLS::try_from(data) {
-                            Ok(tls) => provider.publish(tls),
+                        match parse_and_publish_cert(data, provider).await {
+                            Ok(_) => info!(
+                                "Successfully sent secret {} from namespace {} to provider {}",
+                                secret_name,
+                                secret_namespace,
+                                provider.name()
+                            ),
                             Err(err) => error!("{}", err),
                         };
                     }
@@ -124,17 +109,16 @@ pub fn handle_secret(ev: WatchEvent<Secret>, provider: &dyn Provider) -> anyhow:
                 };
             }
         }
-        WatchEvent::Modified(o) => {
-            let secret_type = o.type_.unwrap_or_default();
-            if secret_type.eq(&expected_type) {
-                let secret_name = o.metadata.unwrap_or_default().name.unwrap_or_default();
-                info!(
-                    "Updated TLS Secret : {} with type {}",
-                    secret_name, secret_type
-                );
-            }
-        }
         _ => {}
     }
+    Ok(())
+}
+
+async fn parse_and_publish_cert(
+    secret_data: BTreeMap<String, ByteString>,
+    provider: &dyn Provider,
+) -> anyhow::Result<()> {
+    let tls = TLS::try_from(secret_data)?; //.with_context(|| format!("Secret to TLS conversion failed"));
+    provider.publish(tls).await?;
     Ok(())
 }
