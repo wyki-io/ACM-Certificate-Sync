@@ -4,7 +4,7 @@ extern crate log;
 mod common;
 mod provider;
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 pub use common::TLS;
 pub use provider::{AcmAlbProvider, Provider};
 
