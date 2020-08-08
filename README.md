@@ -1,6 +1,7 @@
 # Cert Sync
 
-This project aims to synchronize certificates between a source and a target.
+This project aims to synchronize certificates between a source and a
+destination.
 
 The example use case is :
 - a Kubernetes cluster behind AWS ALB

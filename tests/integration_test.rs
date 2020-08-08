@@ -110,8 +110,8 @@ async fn create_certificate() {
     let tls = Arc::new(RwLock::new(TLS::new(
         String::new(),
         String::new(),
-        String::new(),
-        Some(String::new()),
+        Vec::new(),
+        Vec::new(),
     )));
     // It currently tests with an existing Kubernetes cluster
     let receiver = TestReceiver {};

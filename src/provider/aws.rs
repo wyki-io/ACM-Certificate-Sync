@@ -61,15 +61,15 @@ impl AcmAlbProvider {
     }
 
     async fn send_to_acm(&self, tls: TLS) -> anyhow::Result<String> {
-        let domain = tls.domain.clone();
+        let domain = tls.domains.clone();
         // May be a good idea to set it in self
         let existing_cert = self.retrieve_existing_cert(&tls).await?;
         let new_cert = self.publish_certificate(tls, existing_cert).await?;
         match new_cert.certificate_arn {
             Some(arn) => Ok(arn),
             None => Err(anyhow!(format!(
-                "Unable to create ACM certificate for domain {}",
-                domain
+                "Unable to create ACM certificate for cert with domains {}",
+                domain.iter().fold(String::new(), |acc, x| acc + x)
             ))),
         }
     }
@@ -92,7 +92,7 @@ impl AcmAlbProvider {
                 certs
                     .into_iter()
                     .filter(|cert| cert.domain_name.is_some())
-                    .find(|cert| tls.domain == *cert.domain_name.as_ref().unwrap())
+                    .find(|cert| tls.domains.contains(cert.domain_name.as_ref().unwrap()))
             }) {
                 return Ok(Some(cert));
             }
@@ -113,11 +113,16 @@ impl AcmAlbProvider {
         cert_req.private_key = Bytes::from(new_cert.key);
         let mut domain_tag = Tag::default();
         domain_tag.key = String::from("Domain");
-        domain_tag.value = Some(new_cert.domain);
+        domain_tag.value = Some(
+            new_cert
+                .domains
+                .iter()
+                .fold(String::new(), |acc, x| acc + x),
+        );
         cert_req.tags = Some(vec![domain_tag]);
-        if let Some(chain) = new_cert.chain {
-            cert_req.certificate_chain = Some(Bytes::from(chain));
-        }
+
+        let folded_chain = new_cert.chain.iter().fold(String::new(), |acc, x| acc + x);
+        cert_req.certificate_chain = Some(Bytes::from(folded_chain));
         if let Some(arn) = existing_cert {
             cert_req.certificate_arn = arn.certificate_arn;
         }
