@@ -54,7 +54,7 @@ impl super::Provider for AcmAlbProvider {
 }
 
 impl AcmAlbProvider {
-    pub fn new(config: &String) -> anyhow::Result<Self> {
+    pub fn new(config: &str) -> anyhow::Result<Self> {
         Ok(AcmAlbProvider {
             config: parse_config(config)?,
         })
@@ -154,7 +154,7 @@ impl AcmAlbProvider {
 }
 
 /// Get config from file
-fn parse_config(config_str: &String) -> anyhow::Result<AcmAlbConfig> {
+fn parse_config(config_str: &str) -> anyhow::Result<AcmAlbConfig> {
     let config_from_file: AwsRootConfig = serde_yaml::from_str(config_str)?;
     let config = config_from_file.aws;
 

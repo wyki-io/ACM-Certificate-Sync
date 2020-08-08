@@ -46,9 +46,8 @@ impl TLS {
             Some(alt_names) => {
                 let mut domains = Vec::with_capacity(alt_names.len());
                 alt_names.iter().for_each(|name| {
-                    match name.dnsname() {
-                        Some(domain) => domains.push(String::from(domain)),
-                        _ => (),
+                    if let Some(domain) = name.dnsname() {
+                        domains.push(String::from(domain));
                     };
                 });
                 domains
