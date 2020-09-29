@@ -42,7 +42,7 @@ pub struct AcmAlbProvider {
 #[async_trait]
 impl super::Provider for AcmAlbProvider {
     fn name(&self) -> String {
-        String::from("AWS")
+        String::from("AWS ACM-ALB Provider")
     }
 
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {

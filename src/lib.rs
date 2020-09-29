@@ -3,6 +3,7 @@ extern crate log;
 
 mod common;
 mod provider;
+mod source;
 
 use anyhow::anyhow;
 pub use common::TLS;
@@ -20,30 +21,30 @@ use k8s_openapi::ByteString;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-impl TryFrom<BTreeMap<String, ByteString>> for TLS {
-    type Error = anyhow::Error;
+// impl TryFrom<BTreeMap<String, ByteString>> for TLS {
+//     type Error = anyhow::Error;
 
-    fn try_from(value: BTreeMap<String, ByteString>) -> Result<Self, Self::Error> {
-        let cert = match value.get("tls.crt") {
-            Some(x) => x,
-            None => return Err(anyhow!("Unable to get cert from secret")),
-        };
-        let key = match value.get("tls.key") {
-            Some(x) => x,
-            None => return Err(anyhow!("Unable to get key from secret")),
-        };
-        let mut tls = TLS::default();
-        tls.cert = match String::from_utf8(cert.0.clone()) {
-            Ok(x) => x,
-            Err(_) => return Err(anyhow!("Unable to parse the cert from secret")),
-        };
-        tls.key = match String::from_utf8(key.0.clone()) {
-            Ok(x) => x,
-            Err(_) => return Err(anyhow!("Unable to parse the key from secret")),
-        };
-        Ok(tls)
-    }
-}
+//     fn try_from(value: BTreeMap<String, ByteString>) -> Result<Self, Self::Error> {
+//         let cert = match value.get("tls.crt") {
+//             Some(x) => x,
+//             None => return Err(anyhow!("Unable to get cert from secret")),
+//         };
+//         let key = match value.get("tls.key") {
+//             Some(x) => x,
+//             None => return Err(anyhow!("Unable to get key from secret")),
+//         };
+//         let mut tls = TLS::default();
+//         tls.cert = match String::from_utf8(cert.0.clone()) {
+//             Ok(x) => x,
+//             Err(_) => return Err(anyhow!("Unable to parse the cert from secret")),
+//         };
+//         tls.key = match String::from_utf8(key.0.clone()) {
+//             Ok(x) => x,
+//             Err(_) => return Err(anyhow!("Unable to parse the key from secret")),
+//         };
+//         Ok(tls)
+//     }
+// }
 
 pub trait Receiver {
     fn receive() -> TLS;
