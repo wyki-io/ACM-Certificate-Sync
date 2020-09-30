@@ -8,6 +8,7 @@ mod source;
 use anyhow::anyhow;
 pub use common::TLS;
 pub use provider::{AcmAlbProvider, Provider};
+pub use source::{SecretSource, Source};
 
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
@@ -58,7 +59,7 @@ pub trait Receiver {
 //     }
 // }
 
-pub async fn run(receiver: impl Receiver, provider: impl Provider) -> anyhow::Result<()> {
+pub async fn run(receiver: impl Source, provider: impl Provider) -> anyhow::Result<()> {
     let _ = receiver;
     std::env::set_var("RUST_LOG", "info,kube=debug");
     env_logger::init();
@@ -70,6 +71,7 @@ pub async fn run(receiver: impl Receiver, provider: impl Provider) -> anyhow::Re
     let si = Informer::new(secrets).params(lp);
 
     loop {
+        let tls = receiver.receive().await?;
         let mut secrets = si.poll().await?.boxed();
 
         while let Some(secret) = secrets.try_next().await? {

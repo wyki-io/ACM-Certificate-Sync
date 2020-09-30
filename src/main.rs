@@ -1,15 +1,7 @@
-use acs::{run, AcmAlbProvider, Provider, Receiver};
+use acs::{run, SecretSource, Source,  AcmAlbProvider, Provider};
 use async_trait::async_trait;
 use std::io::prelude::*;
 use std::{fs::File, path::Path};
-
-struct DummyReceiver {}
-
-impl Receiver for DummyReceiver {
-    fn receive() -> acs::TLS {
-        todo!()
-    }
-}
 
 struct DummyProvider {}
 
@@ -42,7 +34,7 @@ fn retrieve_config() -> anyhow::Result<String> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = retrieve_config()?;
-    let receiver = DummyReceiver {};
+    let source = SecretSource::new().await?;
     let provider = AcmAlbProvider::new(&config)?;
-    run(receiver, provider).await
+    run(source, provider).await
 }
