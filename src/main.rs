@@ -1,4 +1,4 @@
-use acs::{run, SecretSource, Source,  AcmAlbProvider, Provider};
+use acs::{SecretSource, Source,  AcmAlbProvider, Provider};
 use async_trait::async_trait;
 use std::io::prelude::*;
 use std::{fs::File, path::Path};
@@ -34,7 +34,9 @@ fn retrieve_config() -> anyhow::Result<String> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = retrieve_config()?;
-    let source = SecretSource::new().await?;
+    let source = SecretSource::new(&config).await?;
     let provider = AcmAlbProvider::new(&config)?;
-    run(source, provider).await
+    loop {
+        source.receive(&provider).await?;
+    }
 }

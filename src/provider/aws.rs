@@ -39,6 +39,9 @@ pub struct AcmAlbProvider {
     config: AcmAlbConfig,
 }
 
+// unsafe impl Send for AcmAlbProvider {}
+// unsafe impl Sync for AcmAlbProvider {}
+
 #[async_trait]
 impl super::Provider for AcmAlbProvider {
     fn name(&self) -> String {

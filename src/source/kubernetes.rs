@@ -1,3 +1,6 @@
+
+
+use super::Provider;
 use super::TLS;
 
 use anyhow::anyhow;
@@ -23,20 +26,27 @@ impl super::Source for SecretSource {
         String::from("Kubernetes Secret Source")
     }
 
-    async fn receive(&self) -> anyhow::Result<Vec<TLS>> {
+    async fn receive<'a, T: Provider + Send + Sync>(
+        &'a self,
+        destination: &'a T,
+    ) -> anyhow::Result<()> {
         let mut secrets = self.informer.poll().await?.boxed();
-        let mut certs = Vec::new();
         while let Some(secret) = secrets.try_next().await? {
+            println!("Hello");
             if let Some(cert) = self.filter_certificate(secret)? {
-                certs.push(cert);
+                println!("There");
+                // info!("Will persist cert {:?}", cert.domains);
+                println!("General");
+                destination.publish(cert).await?;
+                println!("Kenobi");
             }
         }
-        Ok(certs)
+        Ok(())
     }
 }
 
 impl SecretSource {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn new(_config: &str) -> anyhow::Result<Self> {
         let client = Client::try_default().await?;
         let secrets: Api<Secret> = Api::all(client);
         let lp = ListParams::default();
