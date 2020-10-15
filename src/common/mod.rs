@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+use std::fmt;
 use openssl::x509::X509;
 
 /// Represents a TLS certificate packaged with its key and CA chain
@@ -14,6 +16,13 @@ pub struct TLS {
     pub key: String,
     pub chain: Vec<String>,
     pub domains: Vec<String>,
+}
+
+impl fmt::Display for TLS {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.domains.join(", "))
+    }
+
 }
 
 impl TLS {
@@ -55,6 +64,24 @@ impl TLS {
             _ => vec![],
         };
         Ok(TLS::new(cert, key, chain, domains))
+    }
+
+    /// Tries to extract certs from String into a Vec of cert
+    pub fn into_vec(certs: String) -> anyhow::Result<Vec<String>> {
+        let mut ret: Vec<String> = vec![];
+        let mut loop_count = 0;
+        let mut last = 0;
+        for (index, _matched) in certs.match_indices("-----BEGIN CERTIFICATE-----") {
+            if loop_count == 0 {
+                loop_count += 1;
+                last = index;
+                continue;
+            }
+            ret.push(String::from(&certs[last..index]));
+            last = index;
+        };
+        ret.push(String::from(&certs[last..]));
+        Ok(ret)
     }
 }
 
@@ -130,5 +157,33 @@ mod tests {
         // Ugly cast, need workaround
         assert_eq!(true, tls.domains.contains(&"*.google.com".to_owned()));
         Ok(())
+    }
+
+
+    #[test]
+    fn split_multiple_certs_into_vec() {
+        let first_cert = indoc!(
+            "
+            -----BEGIN CERTIFICATE-----
+            MIIJVjCCCD6gAwIBAgIQAqGZwYqQRZwCAAAAAHPMbDANBgkqhkiG9w0BAQsFADBC
+            ...
+            MP6Cub32KGa5uYGUBvB4l8B88zFHTsAUBvmgr8LgFTQGgPP6gXKj2ySb
+            -----END CERTIFICATE-----
+            "
+        );
+        let second_cert = indoc!(
+            "
+            -----BEGIN CERTIFICATE-----
+            MIIJVjCCCD6gAwIBAgIQAqGZwYqQRZwCAAAAAHPMbDANBgkqhkiG9w0BAQsFADBC
+            ...
+            MP6Cub32KGa5uYGUBvB4l8B88zFHTsAUBvmgr8LgFTQGgPP6gXKj2ySb
+            -----END CERTIFICATE-----
+            "
+        );
+        let mut concat_certs = String::from(first_cert);
+        concat_certs.push_str(second_cert);
+        let certs = TLS::into_vec(concat_certs).unwrap();
+        assert_eq!(String::from(first_cert), *certs.get(0).unwrap());
+        assert_eq!(String::from(second_cert), *certs.get(1).unwrap());
     }
 }

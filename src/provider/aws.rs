@@ -49,7 +49,9 @@ impl super::Provider for AcmAlbProvider {
     }
 
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
+        debug!("TLS domains : {:?}", tls);
         let cert_arn = self.send_to_acm(tls).await?;
+        debug!("ACM Cert ARN : {}", cert_arn);
         let listeners_arn = vec![String::from("listener_arn")];
         self.link_to_alb_listeners(cert_arn, listeners_arn).await?;
         Ok(())
@@ -57,10 +59,17 @@ impl super::Provider for AcmAlbProvider {
 }
 
 impl AcmAlbProvider {
-    pub fn new(config: &str) -> anyhow::Result<Self> {
-        Ok(AcmAlbProvider {
-            config: parse_config(config)?,
-        })
+    pub fn new(config_str: &str) -> anyhow::Result<Self> {
+        let config = parse_config(config_str)?;
+        if let Some(creds) = config.credentials.as_ref() {
+            debug!(
+                "Using credentials from config, access_key : {}, secret_key : {}",
+                creds.access_key, creds.secret_key
+            );
+            std::env::set_var("AWS_ACCESS_KEY_ID", creds.access_key.clone());
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", creds.secret_key.clone());
+        }
+        Ok(AcmAlbProvider { config })
     }
 
     async fn send_to_acm(&self, tls: TLS) -> anyhow::Result<String> {
@@ -112,6 +121,8 @@ impl AcmAlbProvider {
     ) -> anyhow::Result<ImportCertificateResponse> {
         // Create the request
         let mut cert_req = ImportCertificateRequest::default();
+        println!("{}", &new_cert);
+        // println!("{}", &new_cert.key);
         cert_req.certificate = Bytes::from(new_cert.cert);
         cert_req.private_key = Bytes::from(new_cert.key);
         let mut domain_tag = Tag::default();
@@ -125,11 +136,13 @@ impl AcmAlbProvider {
         cert_req.tags = Some(vec![domain_tag]);
 
         let folded_chain = new_cert.chain.iter().fold(String::new(), |acc, x| acc + x);
-        cert_req.certificate_chain = Some(Bytes::from(folded_chain));
+        // cert_req.certificate_chain = Some(Bytes::from(folded_chain));
+        cert_req.certificate_chain = None;
         if let Some(arn) = existing_cert {
             cert_req.certificate_arn = arn.certificate_arn;
         }
 
+        dbg!(&cert_req);
         // Send the cert
         let client = AcmClient::new(self.config.region.clone());
         let cert_res = client.import_certificate(cert_req).await?;
@@ -161,6 +174,7 @@ fn parse_config(config_str: &str) -> anyhow::Result<AcmAlbConfig> {
     let config_from_file: AwsRootConfig = serde_yaml::from_str(config_str)?;
     let config = config_from_file.aws;
 
+    debug!("Config : {:?}", config);
     // Set region from env if it exists
     // if let Some(env_region) = option_env!("AWS_REGION") {
     //     if let Ok(region) = Region::from_str(env_region) {

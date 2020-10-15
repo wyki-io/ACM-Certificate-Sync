@@ -1,5 +1,3 @@
-
-
 use super::Provider;
 use super::TLS;
 
@@ -13,6 +11,7 @@ use kube::{
     runtime::Informer,
     Client,
 };
+use std::str;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
@@ -35,7 +34,7 @@ impl super::Source for SecretSource {
             println!("Hello");
             if let Some(cert) = self.filter_certificate(secret)? {
                 println!("There");
-                // info!("Will persist cert {:?}", cert.domains);
+                info!("Will persist cert {}", cert);
                 println!("General");
                 destination.publish(cert).await?;
                 println!("Kenobi");
@@ -113,22 +112,15 @@ impl TryFrom<BTreeMap<String, ByteString>> for TLS {
 
     fn try_from(value: BTreeMap<String, ByteString>) -> Result<Self, Self::Error> {
         let cert = match value.get("tls.crt") {
-            Some(x) => x,
+            Some(x) => String::from_utf8(x.0.clone())?,
             None => return Err(anyhow!("Unable to get cert from secret")),
         };
         let key = match value.get("tls.key") {
-            Some(x) => x,
+            Some(x) => String::from_utf8(x.0.clone())?,
             None => return Err(anyhow!("Unable to get key from secret")),
         };
-        let mut tls = TLS::default();
-        tls.cert = match String::from_utf8(cert.0.clone()) {
-            Ok(x) => x,
-            Err(_) => return Err(anyhow!("Unable to parse the cert from secret")),
-        };
-        tls.key = match String::from_utf8(key.0.clone()) {
-            Ok(x) => x,
-            Err(_) => return Err(anyhow!("Unable to parse the key from secret")),
-        };
+        let mut certs = TLS::into_vec(cert)?;
+        let tls = TLS::from_pem(certs.pop().unwrap(), key, vec![])?;
         Ok(tls)
     }
 }
