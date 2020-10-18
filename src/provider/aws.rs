@@ -125,6 +125,7 @@ impl AcmAlbProvider {
         // println!("{}", &new_cert.key);
         cert_req.certificate = Bytes::from(new_cert.cert);
         cert_req.private_key = Bytes::from(new_cert.key);
+        cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
         let mut domain_tag = Tag::default();
         domain_tag.key = String::from("Domain");
         domain_tag.value = Some(
@@ -135,14 +136,10 @@ impl AcmAlbProvider {
         );
         cert_req.tags = Some(vec![domain_tag]);
 
-        let folded_chain = new_cert.chain.iter().fold(String::new(), |acc, x| acc + x);
-        // cert_req.certificate_chain = Some(Bytes::from(folded_chain));
-        cert_req.certificate_chain = None;
         if let Some(arn) = existing_cert {
             cert_req.certificate_arn = arn.certificate_arn;
         }
 
-        dbg!(&cert_req);
         // Send the cert
         let client = AcmClient::new(self.config.region.clone());
         let cert_res = client.import_certificate(cert_req).await?;

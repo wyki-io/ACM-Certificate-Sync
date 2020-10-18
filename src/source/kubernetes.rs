@@ -120,7 +120,11 @@ impl TryFrom<BTreeMap<String, ByteString>> for TLS {
             None => return Err(anyhow!("Unable to get key from secret")),
         };
         let mut certs = TLS::into_vec(cert)?;
-        let tls = TLS::from_pem(certs.pop().unwrap(), key, vec![])?;
+        let tls = TLS::from_pem(
+            certs.drain(0..1).collect(),
+            key,
+            certs
+        )?;
         Ok(tls)
     }
 }
