@@ -4,6 +4,7 @@ This project aims to synchronize certificates between a source and a
 destination.
 
 The example use case is :
+
 - a Kubernetes cluster behind AWS ALB
 - [`cert-manager`](https://cert-manager.io/docs/) that handles certificates on the cluster
 - synchronize certificates created in cluster with the ALB (via ACM)
@@ -29,3 +30,8 @@ aws:
     - arn:aws:elasticloadbalancing:eu-west-3:123456789012:loadbalancer/app/name/1234567890abcdef
     - arn:aws:elasticloadbalancing:eu-west-3:123456789012:loadbalancer/app/name-alt/1234567890abcdee
 ```
+
+## Notes
+
+- Using RSA length different than 2048 will cause ACM to not list those
+  certificates, and you won't be able to import them on ALB
