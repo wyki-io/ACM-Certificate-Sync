@@ -55,7 +55,7 @@ impl SecretSource {
         while let Some(secret) = secrets.try_next().await? {
             if let Some(cert) = self.filter_certificate(secret)? {
                 info!("Will try to synchronize cert with domains {}", cert.domains.join(", "));
-                // destination.publish(cert).await?;
+                destination.publish(cert).await?;
             }
         }
         Ok(())

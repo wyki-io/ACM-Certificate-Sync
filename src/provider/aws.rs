@@ -49,11 +49,20 @@ impl super::Provider for AcmAlbProvider {
     }
 
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
-        debug!("TLS domains : {:?}", tls);
-        let cert_arn = self.send_to_acm(tls).await?;
-        debug!("ACM Cert ARN : {}", cert_arn);
-        let listeners_arn = vec![String::from("listener_arn")];
-        self.link_to_alb_listeners(cert_arn, listeners_arn).await?;
+        let res: anyhow::Result<()> = {
+            debug!("TLS domains : {:?}", tls);
+            let cert_arn = self.send_to_acm(tls).await?;
+            debug!("ACM Cert ARN : {}", cert_arn);
+            let listeners_arn = vec![String::from("listener_arn")];
+            self.link_to_alb_listeners(cert_arn, listeners_arn).await?;
+            Ok(())
+        };
+        match res {
+            Err(e) => {
+                error!("Error while trying to send certificate to ACM : {}", e);
+            },
+            _ => ()
+        }
         Ok(())
     }
 }
@@ -128,16 +137,19 @@ impl AcmAlbProvider {
         cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
         let mut domain_tag = Tag::default();
         domain_tag.key = String::from("Domain");
-        domain_tag.value = Some(
-            new_cert
-                .domains
-                .iter()
-                .fold(String::new(), |acc, x| acc + x),
-        );
-        cert_req.tags = Some(vec![domain_tag]);
+        domain_tag.value = Some(new_cert.domains.join(","));
+        let mut managed_by_tag = Tag::default();
+        managed_by_tag.key = String::from("ManageBy");
+        managed_by_tag.value = Some(String::from("cert-sync"));
 
-        if let Some(arn) = existing_cert {
-            cert_req.certificate_arn = arn.certificate_arn;
+        match existing_cert {
+            Some(arn) => {
+                info!("Use existing certificate ARN {}", arn.certificate_arn.as_ref().unwrap());
+                cert_req.certificate_arn = arn.certificate_arn;
+            },
+            None => {
+                cert_req.tags = Some(vec![domain_tag]);
+            }
         }
 
         // Send the cert
