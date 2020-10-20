@@ -1,6 +1,6 @@
 use anyhow::anyhow;
+use openssl::{nid::Nid, x509::X509};
 use std::fmt;
-use openssl::x509::X509;
 
 /// Represents a TLS certificate packaged with its key and CA chain
 ///
@@ -22,7 +22,6 @@ impl fmt::Display for TLS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.domains.join(", "))
     }
-
 }
 
 impl TLS {
@@ -51,17 +50,19 @@ impl TLS {
     ///
     pub fn from_pem(cert: String, key: String, chain: Vec<String>) -> anyhow::Result<Self> {
         let x509 = X509::from_pem(cert.as_bytes())?;
-        let domains = match x509.subject_alt_names() {
+        let mut domains: Vec<String> = Vec::new();
+        // domains.push(x509.subject_name().entries_by_nid(Nid::COMMONNAME).next().unwrap().data().as_utf8());
+        let common_name = TLS::get_common_name_from_x509(&x509)?;
+        domains.push(common_name);
+        match x509.subject_alt_names() {
             Some(alt_names) => {
-                let mut domains = Vec::with_capacity(alt_names.len());
                 alt_names.iter().for_each(|name| {
                     if let Some(domain) = name.dnsname() {
                         domains.push(String::from(domain));
                     };
                 });
-                domains
             }
-            _ => vec![],
+            _ => (),
         };
         Ok(TLS::new(cert, key, chain, domains))
     }
@@ -79,9 +80,25 @@ impl TLS {
             }
             ret.push(String::from(&certs[last..index]));
             last = index;
-        };
+        }
         ret.push(String::from(&certs[last..]));
         Ok(ret)
+    }
+
+    /// Extract the COMMON_NAME entry from a x509 certificate
+    fn get_common_name_from_x509(x509: &X509) -> anyhow::Result<String> {
+        Ok(String::from(
+            std::str::from_utf8(
+                x509
+                    .subject_name()
+                    .entries_by_nid(Nid::COMMONNAME)
+                    .next()
+                    .ok_or(anyhow!(format!("Unable to get X509 entry COMMON_NAME")))?
+                    .data()
+                    .as_utf8()?
+                    .as_bytes()
+            )?
+        ))
     }
 }
 
@@ -95,56 +112,32 @@ mod tests {
         let cert_pem = indoc!(
             "
             -----BEGIN CERTIFICATE-----
-            MIIJVjCCCD6gAwIBAgIQAqGZwYqQRZwCAAAAAHPMbDANBgkqhkiG9w0BAQsFADBC
-            MQswCQYDVQQGEwJVUzEeMBwGA1UEChMVR29vZ2xlIFRydXN0IFNlcnZpY2VzMRMw
-            EQYDVQQDEwpHVFMgQ0EgMU8xMB4XDTIwMDcxNTA4MjkxNloXDTIwMTAwNzA4Mjkx
-            NlowZjELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcT
-            DU1vdW50YWluIFZpZXcxEzARBgNVBAoTCkdvb2dsZSBMTEMxFTATBgNVBAMMDCou
-            Z29vZ2xlLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABOKBMK+yIazADk2I
-            y94Zn9IlCu6RefcurqTfUeYwzuiHnvE/9EPQrWiNGF+XgwBKk3RSWuHKoiO/d5Cq
-            s/tVh8+jggbtMIIG6TAOBgNVHQ8BAf8EBAMCB4AwEwYDVR0lBAwwCgYIKwYBBQUH
-            AwEwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQURe/AgC2QdGH87CXXiS8/i21XDuww
-            HwYDVR0jBBgwFoAUmNH4bhDrz5vsYJ8YkBug630J/SswaAYIKwYBBQUHAQEEXDBa
-            MCsGCCsGAQUFBzABhh9odHRwOi8vb2NzcC5wa2kuZ29vZy9ndHMxbzFjb3JlMCsG
-            CCsGAQUFBzAChh9odHRwOi8vcGtpLmdvb2cvZ3NyMi9HVFMxTzEuY3J0MIIEqAYD
-            VR0RBIIEnzCCBJuCDCouZ29vZ2xlLmNvbYINKi5hbmRyb2lkLmNvbYIWKi5hcHBl
-            bmdpbmUuZ29vZ2xlLmNvbYIJKi5iZG4uZGV2ghIqLmNsb3VkLmdvb2dsZS5jb22C
-            GCouY3Jvd2Rzb3VyY2UuZ29vZ2xlLmNvbYIGKi5nLmNvgg4qLmdjcC5ndnQyLmNv
-            bYIRKi5nY3BjZG4uZ3Z0MS5jb22CCiouZ2dwaHQuY26CDiouZ2tlY25hcHBzLmNu
-            ghYqLmdvb2dsZS1hbmFseXRpY3MuY29tggsqLmdvb2dsZS5jYYILKi5nb29nbGUu
-            Y2yCDiouZ29vZ2xlLmNvLmlugg4qLmdvb2dsZS5jby5qcIIOKi5nb29nbGUuY28u
-            dWuCDyouZ29vZ2xlLmNvbS5hcoIPKi5nb29nbGUuY29tLmF1gg8qLmdvb2dsZS5j
-            b20uYnKCDyouZ29vZ2xlLmNvbS5jb4IPKi5nb29nbGUuY29tLm14gg8qLmdvb2ds
-            ZS5jb20udHKCDyouZ29vZ2xlLmNvbS52boILKi5nb29nbGUuZGWCCyouZ29vZ2xl
-            LmVzggsqLmdvb2dsZS5mcoILKi5nb29nbGUuaHWCCyouZ29vZ2xlLml0ggsqLmdv
-            b2dsZS5ubIILKi5nb29nbGUucGyCCyouZ29vZ2xlLnB0ghIqLmdvb2dsZWFkYXBp
-            cy5jb22CDyouZ29vZ2xlYXBpcy5jboIRKi5nb29nbGVjbmFwcHMuY26CFCouZ29v
-            Z2xlY29tbWVyY2UuY29tghEqLmdvb2dsZXZpZGVvLmNvbYIMKi5nc3RhdGljLmNu
-            gg0qLmdzdGF0aWMuY29tghIqLmdzdGF0aWNjbmFwcHMuY26CCiouZ3Z0MS5jb22C
-            CiouZ3Z0Mi5jb22CFCoubWV0cmljLmdzdGF0aWMuY29tggwqLnVyY2hpbi5jb22C
-            ECoudXJsLmdvb2dsZS5jb22CEyoud2Vhci5na2VjbmFwcHMuY26CFioueW91dHVi
-            ZS1ub2Nvb2tpZS5jb22CDSoueW91dHViZS5jb22CFioueW91dHViZWVkdWNhdGlv
-            bi5jb22CESoueW91dHViZWtpZHMuY29tggcqLnl0LmJlggsqLnl0aW1nLmNvbYIa
-            YW5kcm9pZC5jbGllbnRzLmdvb2dsZS5jb22CC2FuZHJvaWQuY29tghtkZXZlbG9w
-            ZXIuYW5kcm9pZC5nb29nbGUuY26CHGRldmVsb3BlcnMuYW5kcm9pZC5nb29nbGUu
-            Y26CBGcuY2+CCGdncGh0LmNuggxna2VjbmFwcHMuY26CBmdvby5nbIIUZ29vZ2xl
-            LWFuYWx5dGljcy5jb22CCmdvb2dsZS5jb22CD2dvb2dsZWNuYXBwcy5jboISZ29v
-            Z2xlY29tbWVyY2UuY29tghhzb3VyY2UuYW5kcm9pZC5nb29nbGUuY26CCnVyY2hp
-            bi5jb22CCnd3dy5nb28uZ2yCCHlvdXR1LmJlggt5b3V0dWJlLmNvbYIUeW91dHVi
-            ZWVkdWNhdGlvbi5jb22CD3lvdXR1YmVraWRzLmNvbYIFeXQuYmUwIQYDVR0gBBow
-            GDAIBgZngQwBAgIwDAYKKwYBBAHWeQIFAzAzBgNVHR8ELDAqMCigJqAkhiJodHRw
-            Oi8vY3JsLnBraS5nb29nL0dUUzFPMWNvcmUuY3JsMIIBBAYKKwYBBAHWeQIEAgSB
-            9QSB8gDwAHcA5xLysDd+GmL7jskMYYTx6ns3y1YdESZb8+DzS/JBVG4AAAFzUc6h
-            QwAABAMASDBGAiEAlsUu2NprTTur/KX90fdYN/3Rp+UuuZIa5UJ8wzqRUboCIQDg
-            K2gL9j/Xc7KAwfEMNd4lvGuglCP4BXgZtA6XCKnb0gB1AAe3XBvlfWj/8bDGHSMV
-            x7rmV3xXlLdq7rxhOhpp06IcAAABc1HOozgAAAQDAEYwRAIgQSSH2O7aHNWS3PVQ
-            /R1rkkAH2R36HxDFIdIksoVeCPoCIFKHYcqxojmuVtn/hBJZ+BqAOc/Xjgu0YauK
-            SWUZQxdDMA0GCSqGSIb3DQEBCwUAA4IBAQDLMhvkMISI0O+xmjDBkcobpzwMrQ5t
-            tf4C/16RnKdUj5BqzrtCBi8FKFapfBTumMGpfaZAdrhzritSKutuUADbpOA8FXlE
-            zYGskKhfTMDl1M85cCVkEKQIyb4ib2N8NkXmxrccYe5RATgMi3zMWGTN1XA5hRpp
-            e5ofR/2e+rfYBy974/hpvZhJpKjiPXJyri0p/h0m5IgNJfJSYfWas95OgKKRXYIW
-            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
+            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
+            qMO0ZEBWgA==
             -----END CERTIFICATE-----
             "
         );
@@ -153,12 +146,12 @@ mod tests {
             String::from(""),
             vec![String::from("")],
         )?;
-        assert_eq!(72, tls.domains.len());
+        assert_eq!(1, tls.domains.len());
         // Ugly cast, need workaround
-        assert_eq!(true, tls.domains.contains(&"*.google.com".to_owned()));
+        assert_eq!(true, tls.domains.contains(&"example.org".to_owned()));
+        // Need to check with alt names
         Ok(())
     }
-
 
     #[test]
     fn split_multiple_certs_into_vec() {

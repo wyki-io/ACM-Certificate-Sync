@@ -29,16 +29,9 @@ impl super::Source for SecretSource {
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
-        let mut secrets = self.informer.poll().await?.boxed();
-        while let Some(secret) = secrets.try_next().await? {
-            println!("Hello");
-            if let Some(cert) = self.filter_certificate(secret)? {
-                println!("There");
-                info!("Will persist cert {}", cert);
-                println!("General");
-                destination.publish(cert).await?;
-                println!("Kenobi");
-            }
+        match self.event_loop(destination).await {
+            Err(e) => error!("Error while receiving TLS : {}", e),
+            _ => ()
         }
         Ok(())
     }
@@ -48,28 +41,40 @@ impl SecretSource {
     pub async fn new(_config: &str) -> anyhow::Result<Self> {
         let client = Client::try_default().await?;
         let secrets: Api<Secret> = Api::all(client);
-        let lp = ListParams::default();
+        let lp = ListParams::default()
+            .fields("type=kubernetes.io/tls");
         let informer = Informer::new(secrets).params(lp);
         Ok(SecretSource { informer })
     }
 
+    async fn event_loop<'a, T: Provider + Send + Sync>(
+        &'a self,
+        destination: &'a T,
+    ) -> anyhow::Result<()> {
+        let mut secrets = self.informer.poll().await?.boxed();
+        while let Some(secret) = secrets.try_next().await? {
+            if let Some(cert) = self.filter_certificate(secret)? {
+                info!("Will try to synchronize cert with domains {}", cert.domains.join(", "));
+                // destination.publish(cert).await?;
+            }
+        }
+        Ok(())
+    }
+
     fn filter_certificate(&self, ev: WatchEvent<Secret>) -> anyhow::Result<Option<TLS>> {
-        // dbg!("In handle_secret");
         match ev {
             WatchEvent::Added(secret) | WatchEvent::Modified(secret) => {
-                let certificate_secret = self.match_certificate(secret);
-                let data = self.extract_data(certificate_secret);
-                match data {
+                let secret_name = SecretSource::get_name_from_secret(&secret);
+                let secret_namespace = SecretSource::get_namespace_from_secret(&secret);
+                info!("Pick certificate {}:{}", secret_namespace, secret_name);
+                match secret.data {
                     Some(data) => {
                         let tls = TLS::try_from(data)?;
+                        info!("Received cert from secret {}:{}", secret_namespace, secret_name);
                         Ok(Some(tls))
                     }
                     None => {
-                        // error!(
-                        //     "{}:{} Empty data field in Kubernetes Secret",
-                        //     certificate_secret.metadata.unwrap_or_default().namespace.unwrap_or_default(),
-                        //     secret.metadata.unwrap_or_default().name.unwrap_or_default(),
-                        // );
+                        warn!("No data found in secret {}:{}", secret_namespace, secret_name);
                         Ok(None)
                     }
                 }
@@ -78,31 +83,23 @@ impl SecretSource {
         }
     }
 
-    fn match_certificate(&self, secret: Secret) -> Option<Secret> {
-        let expected_type = String::from("kubernetes.io/tls");
-        let empty_type = String::from("");
-        let secret_type = secret.type_.as_ref().unwrap_or(&empty_type);
-        if secret_type.eq(&expected_type) {
-            // debug!(
-            //     "{}:{} pick certificate",
-            //     secret.metadata.unwrap_or_default().namespace.unwrap_or_default(),
-            //     secret.metadata.unwrap_or_default().name.unwrap_or_default(),
-            // );
-            Some(secret)
-        } else {
-            // debug!(
-            //     "{}:{} ignore secret",
-            //     secret.metadata.unwrap_or_default().namespace.unwrap_or_default(),
-            //     secret.metadata.unwrap_or_default().name.unwrap_or_default()
-            // );
-            None
+    fn get_name_from_secret(secret: &Secret) -> String {
+        match secret.metadata {
+            Some(ref meta) => match meta.name {
+                Some(ref name) => name.clone(),
+                None => String::from("")
+            },
+            None => String::from("")
         }
     }
 
-    fn extract_data(&self, secret: Option<Secret>) -> Option<BTreeMap<String, ByteString>> {
-        match secret {
-            Some(secret) => secret.data,
-            None => None,
+    fn get_namespace_from_secret(secret: &Secret) -> String {
+        match secret.metadata {
+            Some(ref meta) => match meta.namespace {
+                Some(ref namespace) => namespace.clone(),
+                None => String::from("")
+            },
+            None => String::from("")
         }
     }
 }

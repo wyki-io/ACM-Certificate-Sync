@@ -23,8 +23,6 @@ fn retrieve_config() -> anyhow::Result<String> {
 
     let config_path_default = String::from("/config.yml");
     let config_path_env = option_env!("CONFIG_PATH");
-    dbg!(&config_path_default);
-    dbg!(&config_path_env);
     let config_path_str = if let Some(var) = config_path_env {
         var
     } else {
