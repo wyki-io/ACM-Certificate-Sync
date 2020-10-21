@@ -6,10 +6,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use rusoto_acm::{
-    Acm, AcmClient, CertificateSummary, ImportCertificateRequest, ImportCertificateResponse,
-    ListCertificatesRequest, Tag,
-};
+use rusoto_acm::{Acm, AcmClient, CertificateSummary, GetCertificateRequest, ImportCertificateRequest, ImportCertificateResponse, ListCertificatesRequest, Tag};
 use rusoto_core::Region;
 use rusoto_elbv2::{AddListenerCertificatesInput, Certificate, Elb, ElbClient};
 
@@ -37,6 +34,8 @@ struct AcmAlbCredentials {
 
 pub struct AcmAlbProvider {
     config: AcmAlbConfig,
+    client: AcmClient,
+    tag_managed_by: Tag
 }
 
 // unsafe impl Send for AcmAlbProvider {}
@@ -49,19 +48,16 @@ impl super::Provider for AcmAlbProvider {
     }
 
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
-        let res: anyhow::Result<()> = {
-            debug!("TLS domains : {:?}", tls);
-            let cert_arn = self.send_to_acm(tls).await?;
-            debug!("ACM Cert ARN : {}", cert_arn);
-            let listeners_arn = vec![String::from("listener_arn")];
-            self.link_to_alb_listeners(cert_arn, listeners_arn).await?;
-            Ok(())
-        };
-        match res {
-            Err(e) => {
-                error!("Error while trying to send certificate to ACM : {}", e);
+        debug!("TLS domains : {:?}", tls);
+        match self.send_to_acm(tls).await {
+            Ok(cert_arn) => {
+                debug!("ACM Cert ARN : {}", cert_arn);
+                let listeners_arn = vec![String::from("listener_arn")];
+                if let Err(e) = self.link_to_alb_listeners(cert_arn, listeners_arn).await {
+                    error!("Unable to add certificate to ALB : {}", e);
+                };
             },
-            _ => ()
+            Err(e) => error!("Unable to send certificate to ACM : {}", e)
         }
         Ok(())
     }
@@ -78,7 +74,15 @@ impl AcmAlbProvider {
             std::env::set_var("AWS_ACCESS_KEY_ID", creds.access_key.clone());
             std::env::set_var("AWS_SECRET_ACCESS_KEY", creds.secret_key.clone());
         }
-        Ok(AcmAlbProvider { config })
+        let client = AcmClient::new(config.region.clone());
+        let mut tag_managed_by = Tag::default();
+        tag_managed_by.key = String::from("ManageBy");
+        tag_managed_by.value = Some(String::from("cert-sync"));
+        Ok(AcmAlbProvider {
+            config,
+            client,
+            tag_managed_by
+        })
     }
 
     async fn send_to_acm(&self, tls: TLS) -> anyhow::Result<String> {
@@ -99,8 +103,6 @@ impl AcmAlbProvider {
         &self,
         tls: &TLS,
     ) -> anyhow::Result<Option<CertificateSummary>> {
-        // May be a good idea to set it in self
-        let client = AcmClient::new(self.config.region.clone());
         let mut first_iter = true;
         let mut next_token = Some(String::from(""));
         while next_token.is_some() {
@@ -108,7 +110,7 @@ impl AcmAlbProvider {
             if !first_iter && next_token.is_some() {
                 request.next_token = next_token
             }
-            let certs_res = client.list_certificates(request).await?;
+            let certs_res = self.client.list_certificates(request).await?;
             if let Some(cert) = certs_res.certificate_summary_list.and_then(|certs| {
                 certs
                     .into_iter()
@@ -130,31 +132,27 @@ impl AcmAlbProvider {
     ) -> anyhow::Result<ImportCertificateResponse> {
         // Create the request
         let mut cert_req = ImportCertificateRequest::default();
-        println!("{}", &new_cert);
-        // println!("{}", &new_cert.key);
         cert_req.certificate = Bytes::from(new_cert.cert);
         cert_req.private_key = Bytes::from(new_cert.key);
         cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
-        let mut domain_tag = Tag::default();
-        domain_tag.key = String::from("Domain");
-        domain_tag.value = Some(new_cert.domains.join(","));
-        let mut managed_by_tag = Tag::default();
-        managed_by_tag.key = String::from("ManageBy");
-        managed_by_tag.value = Some(String::from("cert-sync"));
+
+        let mut tag_domain = Tag::default();
+        tag_domain.key = String::from("Domain");
+        tag_domain.value = Some(new_cert.domains.join(","));
 
         match existing_cert {
-            Some(arn) => {
-                info!("Use existing certificate ARN {}", arn.certificate_arn.as_ref().unwrap());
-                cert_req.certificate_arn = arn.certificate_arn;
+            Some(cert_summary) => {
+                info!("Use existing certificate ARN {}", cert_summary.certificate_arn.as_ref().unwrap());
+                cert_req.certificate_arn = cert_summary.certificate_arn;
             },
             None => {
-                cert_req.tags = Some(vec![domain_tag]);
+                info!("Create new certificate for domain {}", tag_domain.value.as_ref().unwrap());
+                cert_req.tags = Some(vec![tag_domain, self.tag_managed_by.clone()]);
             }
         }
 
         // Send the cert
-        let client = AcmClient::new(self.config.region.clone());
-        let cert_res = client.import_certificate(cert_req).await?;
+        let cert_res = self.client.import_certificate(cert_req).await?;
         Ok(cert_res)
     }
 
