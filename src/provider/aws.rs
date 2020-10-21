@@ -6,7 +6,10 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
 
-use rusoto_acm::{Acm, AcmClient, CertificateSummary, GetCertificateRequest, ImportCertificateRequest, ImportCertificateResponse, ListCertificatesRequest, Tag};
+use rusoto_acm::{
+    Acm, AcmClient, CertificateSummary, ImportCertificateRequest, ImportCertificateResponse,
+    ListCertificatesRequest, Tag,
+};
 use rusoto_core::Region;
 use rusoto_elbv2::{AddListenerCertificatesInput, Certificate, Elb, ElbClient};
 
@@ -35,7 +38,7 @@ struct AcmAlbCredentials {
 pub struct AcmAlbProvider {
     config: AcmAlbConfig,
     client: AcmClient,
-    tag_managed_by: Tag
+    tag_managed_by: Tag,
 }
 
 // unsafe impl Send for AcmAlbProvider {}
@@ -52,12 +55,13 @@ impl super::Provider for AcmAlbProvider {
         match self.send_to_acm(tls).await {
             Ok(cert_arn) => {
                 debug!("ACM Cert ARN : {}", cert_arn);
-                let listeners_arn = vec![String::from("listener_arn")];
-                if let Err(e) = self.link_to_alb_listeners(cert_arn, listeners_arn).await {
-                    error!("Unable to add certificate to ALB : {}", e);
-                };
-            },
-            Err(e) => error!("Unable to send certificate to ACM : {}", e)
+                if let Some(ref listeners_arns) = self.config.load_balancers {
+                    if let Err(e) = self.link_to_alb_listeners(cert_arn, listeners_arns).await {
+                        error!("Unable to add certificate to ALB : {}", e);
+                    };
+                }
+            }
+            Err(e) => error!("Unable to send certificate to ACM : {}", e),
         }
         Ok(())
     }
@@ -76,12 +80,12 @@ impl AcmAlbProvider {
         }
         let client = AcmClient::new(config.region.clone());
         let mut tag_managed_by = Tag::default();
-        tag_managed_by.key = String::from("ManageBy");
+        tag_managed_by.key = String::from("ManagedBy");
         tag_managed_by.value = Some(String::from("cert-sync"));
         Ok(AcmAlbProvider {
             config,
             client,
-            tag_managed_by
+            tag_managed_by,
         })
     }
 
@@ -142,11 +146,17 @@ impl AcmAlbProvider {
 
         match existing_cert {
             Some(cert_summary) => {
-                info!("Use existing certificate ARN {}", cert_summary.certificate_arn.as_ref().unwrap());
+                info!(
+                    "Use existing certificate ARN {}",
+                    cert_summary.certificate_arn.as_ref().unwrap()
+                );
                 cert_req.certificate_arn = cert_summary.certificate_arn;
-            },
+            }
             None => {
-                info!("Create new certificate for domain {}", tag_domain.value.as_ref().unwrap());
+                info!(
+                    "Create new certificate for domain {}",
+                    tag_domain.value.as_ref().unwrap()
+                );
                 cert_req.tags = Some(vec![tag_domain, self.tag_managed_by.clone()]);
             }
         }
@@ -159,7 +169,7 @@ impl AcmAlbProvider {
     async fn link_to_alb_listeners(
         &self,
         cert_arn: String,
-        listeners_arn: Vec<String>,
+        listeners_arn: &Vec<String>,
     ) -> anyhow::Result<()> {
         // May be a good idea to set it in self
         let client = ElbClient::new(self.config.region.clone());
@@ -168,7 +178,7 @@ impl AcmAlbProvider {
         let certificates = vec![certificate];
         for listener_arn in listeners_arn {
             let mut request = AddListenerCertificatesInput::default();
-            request.listener_arn = listener_arn;
+            request.listener_arn = listener_arn.clone();
             request.certificates = certificates.clone();
             client.add_listener_certificates(request).await?;
         }
