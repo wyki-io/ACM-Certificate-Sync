@@ -1,4 +1,3 @@
-// extern crate bytes;
 extern crate rusoto_acm;
 extern crate rusoto_core;
 
@@ -37,12 +36,10 @@ struct AcmAlbCredentials {
 
 pub struct AcmAlbProvider {
     config: AcmAlbConfig,
-    client: AcmClient,
+    acm_client: AcmClient,
+    elb_client: ElbClient,
     tag_managed_by: Tag,
 }
-
-// unsafe impl Send for AcmAlbProvider {}
-// unsafe impl Sync for AcmAlbProvider {}
 
 #[async_trait]
 impl super::Provider for AcmAlbProvider {
@@ -78,20 +75,21 @@ impl AcmAlbProvider {
             std::env::set_var("AWS_ACCESS_KEY_ID", creds.access_key.clone());
             std::env::set_var("AWS_SECRET_ACCESS_KEY", creds.secret_key.clone());
         }
-        let client = AcmClient::new(config.region.clone());
+        let acm_client = AcmClient::new(config.region.clone());
+        let elb_client = ElbClient::new(config.region.clone());
         let mut tag_managed_by = Tag::default();
         tag_managed_by.key = String::from("ManagedBy");
         tag_managed_by.value = Some(String::from("cert-sync"));
         Ok(AcmAlbProvider {
             config,
-            client,
+            acm_client,
+            elb_client,
             tag_managed_by,
         })
     }
 
     async fn send_to_acm(&self, tls: TLS) -> anyhow::Result<String> {
         let domain = tls.domains.clone();
-        // May be a good idea to set it in self
         let existing_cert = self.retrieve_existing_cert(&tls).await?;
         let new_cert = self.publish_certificate(tls, existing_cert).await?;
         match new_cert.certificate_arn {
@@ -114,7 +112,7 @@ impl AcmAlbProvider {
             if !first_iter && next_token.is_some() {
                 request.next_token = next_token
             }
-            let certs_res = self.client.list_certificates(request).await?;
+            let certs_res = self.acm_client.list_certificates(request).await?;
             if let Some(cert) = certs_res.certificate_summary_list.and_then(|certs| {
                 certs
                     .into_iter()
@@ -162,7 +160,7 @@ impl AcmAlbProvider {
         }
 
         // Send the cert
-        let cert_res = self.client.import_certificate(cert_req).await?;
+        let cert_res = self.acm_client.import_certificate(cert_req).await?;
         Ok(cert_res)
     }
 
