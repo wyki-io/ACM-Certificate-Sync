@@ -3,7 +3,7 @@ extern crate rusoto_core;
 extern crate rusoto_elbv2;
 #[macro_use]
 extern crate log;
-use acs::{Provider, Source, TLS};
+use cert_sync::{Provider, Source, TLS};
 
 use std::sync::{Arc, RwLock};
 

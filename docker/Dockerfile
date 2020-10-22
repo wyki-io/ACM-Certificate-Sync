@@ -1,8 +1,12 @@
-FROM rust:1.43.1-slim-buster
+FROM debian:buster-20201012-slim
+# FROM alpine:3.12.1
+
+RUN apt update && \
+    apt install -y openssl && \
+    apt clean
+# RUN apk add --no-cache openssl
 
 WORKDIR /app
-COPY ./target/debug/acs ./
+COPY target/release/cert-sync ./cert-sync
 
-EXPOSE 3030
-
-CMD ["./acs"]
+CMD ["./cert-sync"]

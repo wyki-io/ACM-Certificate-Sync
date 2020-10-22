@@ -1,9 +1,9 @@
 [package]
-name = "acs"
+name = "cert-sync"
 version = "0.1.0"
 authors = ["Wykiki <wykiki@wyki.io>"]
 edition = "2018"
-keywords = ["kubernetes", "certificate", "ssl", "tls", "aws", "acm"]
+keywords = ["kubernetes", "certificate", "tls", "ssl", "aws", "acm", "alb", "elb"]
 readme = "README.md"
 license = "MIT"
 

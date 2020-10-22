@@ -1,2 +1,3 @@
 /target
-!/target/debug/acs
+!/target/debug/cert-sync
+!/target/release/cert-sync

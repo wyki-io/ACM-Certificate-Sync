@@ -11,32 +11,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "acs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "env_logger",
- "envy",
- "futures",
- "futures-await-test",
- "indoc",
- "k8s-openapi",
- "kube",
- "kube-derive",
- "log",
- "openssl",
- "openssl-sys",
- "rusoto_acm",
- "rusoto_core",
- "rusoto_elbv2",
- "serde",
- "serde_yaml",
- "tokio",
-]
-
-[[package]]
 name = "adler32"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,6 +178,32 @@ name = "cc"
 version = "1.0.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bbb73db36c1246e9034e307d0fba23f9a2e251faa47ade70c1bd252220c8311"
+
+[[package]]
+name = "cert-sync"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "env_logger",
+ "envy",
+ "futures",
+ "futures-await-test",
+ "indoc",
+ "k8s-openapi",
+ "kube",
+ "kube-derive",
+ "log",
+ "openssl",
+ "openssl-sys",
+ "rusoto_acm",
+ "rusoto_core",
+ "rusoto_elbv2",
+ "serde",
+ "serde_yaml",
+ "tokio",
+]
 
 [[package]]
 name = "cfg-if"

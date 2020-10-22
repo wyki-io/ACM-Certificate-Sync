@@ -76,5 +76,5 @@ Create the name of the cluster role to use
 Create the name of the cluster role binding to use
 */}}
 {{- define "cert-sync.clusterRoleBindingName" -}}
-{{- printf "%s:secret-read-binding" (include "cert-sync.fullname" .) }}
+{{- printf "%s-secret-read-binding" (include "cert-sync.fullname" .) }}
 {{- end }}
