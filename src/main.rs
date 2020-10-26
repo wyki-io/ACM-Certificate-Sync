@@ -3,6 +3,7 @@ extern crate log;
 
 use cert_sync::{AcmAlbProvider, Provider, SecretSource, Source, TLS};
 use async_trait::async_trait;
+use anyhow::anyhow;
 use std::io::prelude::*;
 use std::{fs::File, path::Path};
 
@@ -43,7 +44,6 @@ async fn main() -> anyhow::Result<()> {
     let config = retrieve_config()?;
     let source = SecretSource::new(&config).await?;
     let provider = AcmAlbProvider::new(&config)?;
-    loop {
-        source.receive(&provider).await?;
-    }
+    source.receive(&provider).await?;
+    Err(anyhow!("Abort program due to unknown error"))
 }

@@ -78,3 +78,31 @@ Create the name of the cluster role binding to use
 {{- define "cert-sync.clusterRoleBindingName" -}}
 {{- printf "%s-secret-read-binding" (include "cert-sync.fullname" .) }}
 {{- end }}
+
+{{/*
+Create the name of the cert-sync config map to use
+*/}}
+{{- define "cert-sync.configMapName" -}}
+{{- printf "%s-config" (include "cert-sync.fullname" .) }}
+{{- end }}
+
+{{/*
+Define the HTTP Proxy
+*/}}
+{{- define "cert-sync.httpProxy" -}}
+{{- .http | default "" }}
+{{- end }}
+
+{{/*
+Define the HTTPS Proxy
+*/}}
+{{- define "cert-sync.httpsProxy" -}}
+{{- .https | default .http }}
+{{- end }}
+
+{{/*
+Define the No Proxy
+*/}}
+{{- define "cert-sync.noProxy" -}}
+{{- .no | default "localhost,127.0.0.1,10.0.0.0/8,169.254.169.254,.svc,.local" }}
+{{- end }}

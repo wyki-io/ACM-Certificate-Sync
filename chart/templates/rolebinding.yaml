@@ -4,9 +4,9 @@ metadata:
   name: {{ include "cert-sync.clusterRoleBindingName" . }}
   labels: {{ include "cert-sync.labels" . | nindent 4 }}
 subjects:
-  - kind: User
+  - kind: ServiceAccount
     name: {{ include "cert-sync.serviceAccountName" . }}
-    apiGroup: rbac.authorization.k8s.io
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: {{ include "cert-sync.clusterRoleName" . }}

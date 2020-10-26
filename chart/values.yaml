@@ -13,6 +13,28 @@ service:
   type: ClusterIP
   port: 80
 
+# The config used by cert-sync
+config: {}
+  # Aws related configuration
+  # aws:
+    # Region in which to store Certificates and send to ALB. Required
+    # region: eu-west-3
+    # Provide AWS credentials if you do not use IAM Roles
+    # credentials:
+    #   access_key: <access_key>
+    #   secret_key: <secret_key>
+    # Load balancers to link Certificates to. No sync to ALB if empty
+    # load_balancers:
+    #   - arn:aws:elasticloadbalancing:eu-west-3:123456789012:loadbalancer/app/my-alb/0123456789abcdef
+
+# HTTP Proxy settings
+# proxy:
+  # http: http://my.proxy:3128
+  # If not set, will use the one from http
+  # https: http://my.proxy:3128
+  # If you need to update the no_proxy part, add it to the existing values
+  # no: localhost,127.0.0.1,10.0.0.0/8,169.254.169.254,.svc,.local
+
 # cert-sync needs a service account and cluster role to retrieve cluster
 # certificates in read-only
 serviceAccount:

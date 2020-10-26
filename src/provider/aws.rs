@@ -1,3 +1,4 @@
+extern crate hyper;
 extern crate rusoto_acm;
 extern crate rusoto_core;
 
@@ -5,11 +6,17 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
 
+use hyper::client::{Client, HttpConnector};
+use hyper_tls::HttpsConnector;
+use hyper::Uri;
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use rusoto_acm::{
     Acm, AcmClient, CertificateSummary, ImportCertificateRequest, ImportCertificateResponse,
     ListCertificatesRequest, Tag,
 };
+use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
+use rusoto_credential::ChainProvider;
 use rusoto_elbv2::{AddListenerCertificatesInput, Certificate, Elb, ElbClient};
 
 use serde::{Deserialize, Serialize};
@@ -75,8 +82,9 @@ impl AcmAlbProvider {
             std::env::set_var("AWS_ACCESS_KEY_ID", creds.access_key.clone());
             std::env::set_var("AWS_SECRET_ACCESS_KEY", creds.secret_key.clone());
         }
-        let acm_client = AcmClient::new(config.region.clone());
-        let elb_client = ElbClient::new(config.region.clone());
+        let credentials_provider = ChainProvider::new();
+        let acm_client = AcmClient::new_with(Self::create_client()?, credentials_provider.clone(), config.region.clone());
+        let elb_client = ElbClient::new_with(Self::create_client()?, credentials_provider, config.region.clone());
         let mut tag_managed_by = Tag::default();
         tag_managed_by.key = String::from("ManagedBy");
         tag_managed_by.value = Some(String::from("cert-sync"));
@@ -86,6 +94,51 @@ impl AcmAlbProvider {
             elb_client,
             tag_managed_by,
         })
+    }
+
+    fn create_client() -> anyhow::Result<HttpClient<ProxyConnector<HttpsConnector<HttpConnector>>>> {
+        // use std::env::var;
+        let http_proxy = std::env::var("HTTP_PROXY")
+            .or(std::env::var("http_proxy"))
+            .ok();
+        let https_proxy = std::env::var("HTTPS_PROXY")
+            .or(std::env::var("https_proxy"))
+            .ok()
+            .or(http_proxy.clone());
+        let no_proxy = std::env::var("NO_PROXY").or(std::env::var("no_proxy")).ok();
+        let mut proxies: Vec<Proxy> = Vec::new();
+        if let Some(prox) = http_proxy {
+            proxies.push(Proxy::new(
+                Intercept::Http,
+                prox.parse::<Uri>().expect("Malformed HTTP_PROXY env var"),
+            ));
+        }
+        if let Some(prox) = https_proxy {
+            proxies.push(Proxy::new(
+                Intercept::Https,
+                prox.parse::<Uri>().expect("Malformed HTTPS_PROXY env var"),
+            ));
+        }
+        let https_connector = HttpsConnector::new();
+        let proxy_connector = match !proxies.is_empty() {
+            true => {
+                let mut proxy_connector =
+                    ProxyConnector::from_proxy(https_connector, proxies.pop().unwrap())?;
+                while !proxies.is_empty() {
+                    proxy_connector.add_proxy(proxies.pop().unwrap());
+                }
+                proxy_connector
+            }
+            false => ProxyConnector::new(https_connector)?,
+        };
+        let mut hyper_builder = Client::builder();
+
+        // disabling due to connection closed issue
+        hyper_builder.pool_max_idle_per_host(0);
+        Ok(rusoto_core::HttpClient::from_builder(
+            hyper_builder,
+            proxy_connector,
+        ))
     }
 
     async fn send_to_acm(&self, tls: TLS) -> anyhow::Result<String> {
@@ -136,7 +189,9 @@ impl AcmAlbProvider {
         let mut cert_req = ImportCertificateRequest::default();
         cert_req.certificate = Bytes::from(new_cert.cert);
         cert_req.private_key = Bytes::from(new_cert.key);
-        cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
+        if !new_cert.chain.is_empty() {
+            cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
+        }
 
         let mut tag_domain = Tag::default();
         tag_domain.key = String::from("Domain");
@@ -169,8 +224,6 @@ impl AcmAlbProvider {
         cert_arn: String,
         listeners_arn: &Vec<String>,
     ) -> anyhow::Result<()> {
-        // May be a good idea to set it in self
-        let client = ElbClient::new(self.config.region.clone());
         let mut certificate = Certificate::default();
         certificate.certificate_arn = Some(cert_arn);
         let certificates = vec![certificate];
@@ -178,7 +231,7 @@ impl AcmAlbProvider {
             let mut request = AddListenerCertificatesInput::default();
             request.listener_arn = listener_arn.clone();
             request.certificates = certificates.clone();
-            client.add_listener_certificates(request).await?;
+            self.elb_client.add_listener_certificates(request).await?;
         }
         Ok(())
     }

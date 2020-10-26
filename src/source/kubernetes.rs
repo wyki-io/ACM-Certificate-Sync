@@ -29,9 +29,11 @@ impl super::Source for SecretSource {
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
-        match self.event_loop(destination).await {
-            Err(e) => error!("Error while receiving TLS : {}", e),
-            _ => ()
+        let mut secrets = self.informer.poll().await?.boxed();
+        while let Some(secret) = secrets.try_next().await? {
+            if let Err(e) = self.event_loop(destination, secret).await {
+                error!("Error while receiving TLS : {}", e);
+            }
         }
         Ok(())
     }
@@ -50,13 +52,11 @@ impl SecretSource {
     async fn event_loop<'a, T: Provider + Send + Sync>(
         &'a self,
         destination: &'a T,
+        secret: WatchEvent<Secret>
     ) -> anyhow::Result<()> {
-        let mut secrets = self.informer.poll().await?.boxed();
-        while let Some(secret) = secrets.try_next().await? {
-            if let Some(cert) = self.filter_certificate(secret)? {
-                info!("Will try to synchronize cert with domains {}", cert.domains.join(", "));
-                destination.publish(cert).await?;
-            }
+        if let Some(cert) = self.filter_certificate(secret)? {
+            info!("Will try to synchronize cert with domains {}", cert.domains.join(", "));
+            destination.publish(cert).await?;
         }
         Ok(())
     }
@@ -84,21 +84,15 @@ impl SecretSource {
     }
 
     fn get_name_from_secret(secret: &Secret) -> String {
-        match secret.metadata {
-            Some(ref meta) => match meta.name {
-                Some(ref name) => name.clone(),
-                None => String::from("")
-            },
+        match secret.metadata.name {
+            Some(ref name) => name.clone(),
             None => String::from("")
         }
     }
 
     fn get_namespace_from_secret(secret: &Secret) -> String {
-        match secret.metadata {
-            Some(ref meta) => match meta.namespace {
-                Some(ref namespace) => namespace.clone(),
-                None => String::from("")
-            },
+        match secret.metadata.namespace {
+            Some(ref namespace) => namespace.clone(),
             None => String::from("")
         }
     }
