@@ -89,7 +89,7 @@ impl TLS {
             x509.subject_name()
                 .entries_by_nid(Nid::COMMONNAME)
                 .next()
-                .ok_or(anyhow!("Unable to get X509 entry COMMON_NAME"))?
+                .ok_or_else(|| anyhow!("Unable to get X509 entry COMMON_NAME"))?
                 .data()
                 .as_utf8()?
                 .as_bytes(),
