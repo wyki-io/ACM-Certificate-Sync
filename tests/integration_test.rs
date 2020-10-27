@@ -18,7 +18,10 @@ pub struct TestSource {}
 
 #[async_trait]
 impl Source for TestSource {
-    async fn receive<'a, T: Provider + Send + Sync>(&'a self, _destination: &'a T) -> anyhow::Result<()> {
+    async fn receive<'a, T: Provider + Send + Sync>(
+        &'a self,
+        _destination: &'a T,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 

@@ -6,17 +6,19 @@ use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
+#[allow(deprecated)]
 use kube::{
     api::{Api, ListParams, WatchEvent},
     runtime::Informer,
     Client,
 };
-use std::str;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::str;
 
 use tokio::time::{delay_for, Duration};
 
+#[allow(deprecated)]
 pub struct SecretSource {
     informer: Informer<Secret>,
 }
@@ -27,6 +29,7 @@ impl super::Source for SecretSource {
         String::from("Kubernetes Secret Source")
     }
 
+    #[allow(deprecated)]
     async fn receive<'a, T: Provider + Send + Sync>(
         &'a self,
         destination: &'a T,
@@ -44,11 +47,11 @@ impl super::Source for SecretSource {
 }
 
 impl SecretSource {
+    #[allow(deprecated)]
     pub async fn new(_config: &str) -> anyhow::Result<Self> {
         let client = Client::try_default().await?;
         let secrets: Api<Secret> = Api::all(client);
-        let lp = ListParams::default()
-            .fields("type=kubernetes.io/tls");
+        let lp = ListParams::default().fields("type=kubernetes.io/tls");
         let informer = Informer::new(secrets).params(lp);
         Ok(SecretSource { informer })
     }
@@ -56,10 +59,13 @@ impl SecretSource {
     async fn event_loop<'a, T: Provider + Send + Sync>(
         &'a self,
         destination: &'a T,
-        secret: WatchEvent<Secret>
+        secret: WatchEvent<Secret>,
     ) -> anyhow::Result<()> {
         if let Some(cert) = self.filter_certificate(secret)? {
-            info!("Will try to synchronize cert with domains {}", cert.domains.join(", "));
+            info!(
+                "Will try to synchronize cert with domains {}",
+                cert.domains.join(", ")
+            );
             destination.publish(cert).await?;
         }
         Ok(())
@@ -74,11 +80,17 @@ impl SecretSource {
                 match secret.data {
                     Some(data) => {
                         let tls = TLS::try_from(data)?;
-                        info!("Received cert from secret {}:{}", secret_namespace, secret_name);
+                        info!(
+                            "Received cert from secret {}:{}",
+                            secret_namespace, secret_name
+                        );
                         Ok(Some(tls))
                     }
                     None => {
-                        warn!("No data found in secret {}:{}", secret_namespace, secret_name);
+                        warn!(
+                            "No data found in secret {}:{}",
+                            secret_namespace, secret_name
+                        );
                         Ok(None)
                     }
                 }
@@ -90,14 +102,14 @@ impl SecretSource {
     fn get_name_from_secret(secret: &Secret) -> String {
         match secret.metadata.name {
             Some(ref name) => name.clone(),
-            None => String::from("")
+            None => String::from(""),
         }
     }
 
     fn get_namespace_from_secret(secret: &Secret) -> String {
         match secret.metadata.namespace {
             Some(ref namespace) => namespace.clone(),
-            None => String::from("")
+            None => String::from(""),
         }
     }
 }
@@ -114,12 +126,8 @@ impl TryFrom<BTreeMap<String, ByteString>> for TLS {
             Some(x) => String::from_utf8(x.0.clone())?,
             None => return Err(anyhow!("Unable to get key from secret")),
         };
-        let mut certs = TLS::into_vec(cert)?;
-        let tls = TLS::from_pem(
-            certs.drain(0..1).collect(),
-            key,
-            certs
-        )?;
+        let mut certs = TLS::split_to_vec(cert)?;
+        let tls = TLS::from_pem(certs.drain(0..1).collect(), key, certs)?;
         Ok(tls)
     }
 }

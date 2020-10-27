@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use openssl::{nid::Nid, x509::X509};
-use std::fmt;
 use std::collections::HashSet;
+use std::fmt;
 
 /// Represents a TLS certificate packaged with its key and CA chain
 ///
@@ -55,21 +55,18 @@ impl TLS {
         // domains.push(x509.subject_name().entries_by_nid(Nid::COMMONNAME).next().unwrap().data().as_utf8());
         let common_name = TLS::get_common_name_from_x509(&x509)?;
         domains.insert(common_name);
-        match x509.subject_alt_names() {
-            Some(alt_names) => {
-                alt_names.iter().for_each(|name| {
-                    if let Some(domain) = name.dnsname() {
-                        domains.insert(String::from(domain));
-                    };
-                });
-            }
-            _ => (),
+        if let Some(alt_names) = x509.subject_alt_names() {
+            alt_names.iter().for_each(|name| {
+                if let Some(domain) = name.dnsname() {
+                    domains.insert(String::from(domain));
+                };
+            });
         };
         Ok(TLS::new(cert, key, chain, domains.into_iter().collect()))
     }
 
     /// Tries to extract certs from String into a Vec of cert
-    pub fn into_vec(certs: String) -> anyhow::Result<Vec<String>> {
+    pub fn split_to_vec(certs: String) -> anyhow::Result<Vec<String>> {
         let mut ret: Vec<String> = vec![];
         let mut loop_count = 0;
         let mut last = 0;
@@ -88,18 +85,15 @@ impl TLS {
 
     /// Extract the COMMON_NAME entry from a x509 certificate
     fn get_common_name_from_x509(x509: &X509) -> anyhow::Result<String> {
-        Ok(String::from(
-            std::str::from_utf8(
-                x509
-                    .subject_name()
-                    .entries_by_nid(Nid::COMMONNAME)
-                    .next()
-                    .ok_or(anyhow!(format!("Unable to get X509 entry COMMON_NAME")))?
-                    .data()
-                    .as_utf8()?
-                    .as_bytes()
-            )?
-        ))
+        Ok(String::from(std::str::from_utf8(
+            x509.subject_name()
+                .entries_by_nid(Nid::COMMONNAME)
+                .next()
+                .ok_or(anyhow!("Unable to get X509 entry COMMON_NAME"))?
+                .data()
+                .as_utf8()?
+                .as_bytes(),
+        )?))
     }
 }
 
@@ -176,7 +170,7 @@ mod tests {
         );
         let mut concat_certs = String::from(first_cert);
         concat_certs.push_str(second_cert);
-        let certs = TLS::into_vec(concat_certs).unwrap();
+        let certs = TLS::split_to_vec(concat_certs).unwrap();
         assert_eq!(String::from(first_cert), *certs.get(0).unwrap());
         assert_eq!(String::from(second_cert), *certs.get(1).unwrap());
     }

@@ -9,5 +9,8 @@ pub use kubernetes::SecretSource;
 #[async_trait]
 pub trait Source {
     fn name(&self) -> String;
-    async fn receive<'a, T: Provider + Send + Sync>(&'a self, destination: &'a T) -> anyhow::Result<()>;
+    async fn receive<'a, T: Provider + Send + Sync>(
+        &'a self,
+        destination: &'a T,
+    ) -> anyhow::Result<()>;
 }

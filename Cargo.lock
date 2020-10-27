@@ -199,7 +199,6 @@ dependencies = [
  "indoc",
  "k8s-openapi",
  "kube",
- "kube-derive",
  "log",
  "openssl",
  "openssl-sys",
@@ -843,19 +842,6 @@ dependencies = [
  "time 0.2.16",
  "tokio",
  "url",
-]
-
-[[package]]
-name = "kube-derive"
-version = "0.43.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd71bf282e5551ac0852afcf25352b7fb8dd9a66eed7b6e66a6ebbf6b5b2f475"
-dependencies = [
- "Inflector",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn",
 ]
 
 [[package]]

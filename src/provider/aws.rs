@@ -106,15 +106,14 @@ impl AcmAlbProvider {
 
     fn create_client() -> anyhow::Result<HttpClient<ProxyConnector<HttpsConnector<HttpConnector>>>>
     {
-        // use std::env::var;
         let http_proxy = std::env::var("HTTP_PROXY")
-            .or(std::env::var("http_proxy"))
+            .or_else(|_| std::env::var("http_proxy"))
             .ok();
         let https_proxy = std::env::var("HTTPS_PROXY")
             .or(std::env::var("https_proxy"))
             .ok()
             .or(http_proxy.clone());
-        let no_proxy = std::env::var("NO_PROXY").or(std::env::var("no_proxy")).ok();
+        let _no_proxy = std::env::var("NO_PROXY").or(std::env::var("no_proxy")).ok();
         let mut proxies: Vec<Proxy> = Vec::new();
         if let Some(prox) = http_proxy {
             proxies.push(Proxy::new(
@@ -237,7 +236,7 @@ impl AcmAlbProvider {
     async fn link_to_alb_listeners(
         &self,
         cert_arn: String,
-        listeners_arn: &Vec<String>,
+        listeners_arn: &[String],
     ) -> anyhow::Result<()> {
         let mut certificate = Certificate::default();
         certificate.certificate_arn = Some(cert_arn);
