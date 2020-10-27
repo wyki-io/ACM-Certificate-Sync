@@ -2,23 +2,9 @@
 extern crate log;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
-use cert_sync::{AcmAlbProvider, Provider, SecretSource, Source, TLS};
+use cert_sync::{AcmAlbDestination, SecretSource, Source};
 use std::io::prelude::*;
 use std::{fs::File, path::Path};
-
-struct DummyProvider {}
-
-#[async_trait]
-impl Provider for DummyProvider {
-    fn name(&self) -> String {
-        String::from("Dummy")
-    }
-    async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
-        let _ = tls;
-        Ok(())
-    }
-}
 
 fn retrieve_config() -> anyhow::Result<String> {
     let config_path_default = String::from("./config.yml");
@@ -42,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let config = retrieve_config()?;
     let source = SecretSource::new(&config).await?;
-    let provider = AcmAlbProvider::new(&config)?;
-    source.receive(&provider).await?;
+    let destination = AcmAlbDestination::new(&config)?;
+    source.receive(&destination).await?;
     Err(anyhow!("Abort program due to unknown error"))
 }

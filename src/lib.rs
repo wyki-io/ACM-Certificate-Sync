@@ -2,9 +2,9 @@
 extern crate log;
 
 mod common;
-mod provider;
+mod destination;
 mod source;
 
 pub use common::TLS;
-pub use provider::{AcmAlbProvider, Provider};
+pub use destination::{AcmAlbDestination, Destination};
 pub use source::{SecretSource, Source};

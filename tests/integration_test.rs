@@ -3,7 +3,7 @@ extern crate rusoto_core;
 extern crate rusoto_elbv2;
 #[macro_use]
 extern crate log;
-use cert_sync::{Provider, Source, TLS};
+use cert_sync::{Destination, Source, TLS};
 
 use std::sync::{Arc, RwLock};
 
@@ -18,7 +18,7 @@ pub struct TestSource {}
 
 #[async_trait]
 impl Source for TestSource {
-    async fn receive<'a, T: Provider + Send + Sync>(
+    async fn receive<'a, T: Destination + Send + Sync>(
         &'a self,
         _destination: &'a T,
     ) -> anyhow::Result<()> {
@@ -30,12 +30,12 @@ impl Source for TestSource {
     }
 }
 
-pub struct TestProvider {
+pub struct TestDestination {
     pub tls: Arc<RwLock<TLS>>,
 }
 
 #[async_trait]
-impl Provider for TestProvider {
+impl Destination for TestDestination {
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
         let mut tls_write = self.tls.write().unwrap();
         *tls_write = tls;
@@ -122,9 +122,8 @@ async fn create_certificate() {
         Vec::new(),
     )));
     // It currently tests with an existing Kubernetes cluster
-    let receiver = TestSource {};
-    let provider = TestProvider { tls: tls.clone() };
-    // tokio::spawn(run(receiver, provider));
+    let source = TestSource {};
+    let destination = TestDestination { tls: tls.clone() };
 
     // Pre test cleanup
     let client = init_client().await;

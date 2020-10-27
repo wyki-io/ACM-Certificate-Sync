@@ -1,4 +1,4 @@
-use super::Provider;
+use super::Destination;
 use super::TLS;
 
 use anyhow::anyhow;
@@ -30,7 +30,7 @@ impl super::Source for SecretSource {
     }
 
     #[allow(deprecated)]
-    async fn receive<'a, T: Provider + Send + Sync>(
+    async fn receive<'a, T: Destination + Send + Sync>(
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
@@ -56,7 +56,7 @@ impl SecretSource {
         Ok(SecretSource { informer })
     }
 
-    async fn event_loop<'a, T: Provider + Send + Sync>(
+    async fn event_loop<'a, T: Destination + Send + Sync>(
         &'a self,
         destination: &'a T,
         secret: WatchEvent<Secret>,

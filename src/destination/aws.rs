@@ -41,7 +41,7 @@ struct AcmAlbCredentials {
     secret_key: String,
 }
 
-pub struct AcmAlbProvider {
+pub struct AcmAlbDestination {
     config: AcmAlbConfig,
     acm_client: AcmClient,
     elb_client: ElbClient,
@@ -49,9 +49,9 @@ pub struct AcmAlbProvider {
 }
 
 #[async_trait]
-impl super::Provider for AcmAlbProvider {
+impl super::Destination for AcmAlbDestination {
     fn name(&self) -> String {
-        String::from("AWS ACM-ALB Provider")
+        String::from("AWS ACM-ALB ")
     }
 
     async fn publish(&self, tls: TLS) -> anyhow::Result<()> {
@@ -71,7 +71,7 @@ impl super::Provider for AcmAlbProvider {
     }
 }
 
-impl AcmAlbProvider {
+impl AcmAlbDestination {
     pub fn new(config_str: &str) -> anyhow::Result<Self> {
         let config = parse_config(config_str)?;
         if let Some(creds) = config.credentials.as_ref() {
@@ -96,7 +96,7 @@ impl AcmAlbProvider {
         let mut tag_managed_by = Tag::default();
         tag_managed_by.key = String::from("ManagedBy");
         tag_managed_by.value = Some(String::from("cert-sync"));
-        Ok(AcmAlbProvider {
+        Ok(AcmAlbDestination {
             config,
             acm_client,
             elb_client,
@@ -110,10 +110,12 @@ impl AcmAlbProvider {
             .or_else(|_| std::env::var("http_proxy"))
             .ok();
         let https_proxy = std::env::var("HTTPS_PROXY")
-            .or(std::env::var("https_proxy"))
+            .or_else(|_| std::env::var("https_proxy"))
             .ok()
-            .or(http_proxy.clone());
-        let _no_proxy = std::env::var("NO_PROXY").or(std::env::var("no_proxy")).ok();
+            .or_else(|| http_proxy.clone());
+        let _no_proxy = std::env::var("NO_PROXY")
+            .or_else(|_| std::env::var("no_proxy"))
+            .ok();
         let mut proxies: Vec<Proxy> = Vec::new();
         if let Some(prox) = http_proxy {
             proxies.push(Proxy::new(
