@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use openssl::{nid::Nid, x509::X509};
 use std::fmt;
+use std::collections::HashSet;
 
 /// Represents a TLS certificate packaged with its key and CA chain
 ///
@@ -50,21 +51,21 @@ impl TLS {
     ///
     pub fn from_pem(cert: String, key: String, chain: Vec<String>) -> anyhow::Result<Self> {
         let x509 = X509::from_pem(cert.as_bytes())?;
-        let mut domains: Vec<String> = Vec::new();
+        let mut domains: HashSet<String> = HashSet::new();
         // domains.push(x509.subject_name().entries_by_nid(Nid::COMMONNAME).next().unwrap().data().as_utf8());
         let common_name = TLS::get_common_name_from_x509(&x509)?;
-        domains.push(common_name);
+        domains.insert(common_name);
         match x509.subject_alt_names() {
             Some(alt_names) => {
                 alt_names.iter().for_each(|name| {
                     if let Some(domain) = name.dnsname() {
-                        domains.push(String::from(domain));
+                        domains.insert(String::from(domain));
                     };
                 });
             }
             _ => (),
         };
-        Ok(TLS::new(cert, key, chain, domains))
+        Ok(TLS::new(cert, key, chain, domains.into_iter().collect()))
     }
 
     /// Tries to extract certs from String into a Vec of cert

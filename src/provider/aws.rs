@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 
 use hyper::client::{Client, HttpConnector};
-use hyper_tls::HttpsConnector;
 use hyper::Uri;
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
+use hyper_tls::HttpsConnector;
 use rusoto_acm::{
     Acm, AcmClient, CertificateSummary, ImportCertificateRequest, ImportCertificateResponse,
     ListCertificatesRequest, Tag,
@@ -83,8 +83,16 @@ impl AcmAlbProvider {
             std::env::set_var("AWS_SECRET_ACCESS_KEY", creds.secret_key.clone());
         }
         let credentials_provider = ChainProvider::new();
-        let acm_client = AcmClient::new_with(Self::create_client()?, credentials_provider.clone(), config.region.clone());
-        let elb_client = ElbClient::new_with(Self::create_client()?, credentials_provider, config.region.clone());
+        let acm_client = AcmClient::new_with(
+            Self::create_client()?,
+            credentials_provider.clone(),
+            config.region.clone(),
+        );
+        let elb_client = ElbClient::new_with(
+            Self::create_client()?,
+            credentials_provider,
+            config.region.clone(),
+        );
         let mut tag_managed_by = Tag::default();
         tag_managed_by.key = String::from("ManagedBy");
         tag_managed_by.value = Some(String::from("cert-sync"));
@@ -96,7 +104,8 @@ impl AcmAlbProvider {
         })
     }
 
-    fn create_client() -> anyhow::Result<HttpClient<ProxyConnector<HttpsConnector<HttpConnector>>>> {
+    fn create_client() -> anyhow::Result<HttpClient<ProxyConnector<HttpsConnector<HttpConnector>>>>
+    {
         // use std::env::var;
         let http_proxy = std::env::var("HTTP_PROXY")
             .or(std::env::var("http_proxy"))
@@ -193,9 +202,15 @@ impl AcmAlbProvider {
             cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
         }
 
+        let default_domain = String::from("");
+        let main_domain = new_cert.domains.get(0).unwrap_or(&default_domain);
+        let mut tag_name = Tag::default();
+        tag_name.key = String::from("Name");
+        tag_name.value = Some(main_domain.clone());
+
         let mut tag_domain = Tag::default();
         tag_domain.key = String::from("Domain");
-        tag_domain.value = Some(new_cert.domains.join(","));
+        tag_domain.value = Some(main_domain.clone());
 
         match existing_cert {
             Some(cert_summary) => {
@@ -210,7 +225,7 @@ impl AcmAlbProvider {
                     "Create new certificate for domain {}",
                     tag_domain.value.as_ref().unwrap()
                 );
-                cert_req.tags = Some(vec![tag_domain, self.tag_managed_by.clone()]);
+                cert_req.tags = Some(vec![tag_name, tag_domain, self.tag_managed_by.clone()]);
             }
         }
 

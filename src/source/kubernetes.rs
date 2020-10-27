@@ -15,6 +15,8 @@ use std::str;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
+use tokio::time::{delay_for, Duration};
+
 pub struct SecretSource {
     informer: Informer<Secret>,
 }
@@ -34,6 +36,8 @@ impl super::Source for SecretSource {
             if let Err(e) = self.event_loop(destination, secret).await {
                 error!("Error while receiving TLS : {}", e);
             }
+            // Delay to avoid throttling on destination side
+            delay_for(Duration::from_secs(1)).await;
         }
         Ok(())
     }

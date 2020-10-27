@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate log;
 
-use cert_sync::{AcmAlbProvider, Provider, SecretSource, Source, TLS};
-use async_trait::async_trait;
 use anyhow::anyhow;
+use async_trait::async_trait;
+use cert_sync::{AcmAlbProvider, Provider, SecretSource, Source, TLS};
 use std::io::prelude::*;
 use std::{fs::File, path::Path};
 
@@ -21,7 +21,6 @@ impl Provider for DummyProvider {
 }
 
 fn retrieve_config() -> anyhow::Result<String> {
-
     let config_path_default = String::from("./config.yml");
     let config_path_env = option_env!("CONFIG_PATH");
     let config_path_str = if let Some(var) = config_path_env {
