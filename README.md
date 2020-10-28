@@ -9,10 +9,20 @@ The example use case is :
 - [`cert-manager`](https://cert-manager.io/docs/) that handles certificates on the cluster
 - synchronize certificates created in cluster with the ALB (via ACM)
 
+## Available sources
+
+- Kubernetes
+
+## Available destinations
+
+- ACM (with possible ALB sync)
+
 ## Configuration
 
-The program will seek the configuration file under `/config.yml` by default.
+The program will seek the configuration file under `/app/config/config.yml` by default.
 It can be modified via the env var `CONFIG_PATH`.
+
+You can configure the log level via `RUST_LOG` : `info,kube=warn,hyper=error...`
 
 The configuration file reference :
 

@@ -7,7 +7,7 @@ use std::io::prelude::*;
 use std::{fs::File, path::Path};
 
 fn retrieve_config() -> anyhow::Result<String> {
-    let config_path_default = String::from("./config.yml");
+    let config_path_default = String::from("./config/config.yml");
     let config_path_env = option_env!("CONFIG_PATH");
     let config_path_str = if let Some(var) = config_path_env {
         var
@@ -24,7 +24,6 @@ fn retrieve_config() -> anyhow::Result<String> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "info,kube=info");
     env_logger::init();
     let config = retrieve_config()?;
     let source = SecretSource::new(&config).await?;
