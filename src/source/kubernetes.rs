@@ -6,21 +6,21 @@ use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
-#[allow(deprecated)]
 use kube::{
-    api::{Api, ListParams, WatchEvent},
-    runtime::Informer,
+    api::{Api, ListParams},
     Client,
 };
+use kube_runtime::utils::try_flatten_applied;
+use kube_runtime::watcher;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str;
 
 use tokio::time::{delay_for, Duration};
 
-#[allow(deprecated)]
 pub struct SecretSource {
-    informer: Informer<Secret>,
+    api: Api<Secret>,
+    list_params: ListParams,
 }
 
 #[async_trait]
@@ -29,13 +29,13 @@ impl super::Source for SecretSource {
         String::from("Kubernetes Secret Source")
     }
 
-    #[allow(deprecated)]
     async fn receive<'a, T: Destination + Send + Sync>(
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
-        let mut secrets = self.informer.poll().await?.boxed();
-        while let Some(secret) = secrets.try_next().await? {
+        let watcher = watcher(self.api.clone(), self.list_params.clone());
+        let mut watcher = try_flatten_applied(watcher).boxed();
+        while let Some(secret) = watcher.try_next().await? {
             if let Err(e) = self.event_loop(destination, secret).await {
                 error!("Error while receiving TLS : {}", e);
             }
@@ -47,19 +47,17 @@ impl super::Source for SecretSource {
 }
 
 impl SecretSource {
-    #[allow(deprecated)]
     pub async fn new(_config: &str) -> anyhow::Result<Self> {
         let client = Client::try_default().await?;
-        let secrets: Api<Secret> = Api::all(client);
-        let lp = ListParams::default().fields("type=kubernetes.io/tls");
-        let informer = Informer::new(secrets).params(lp);
-        Ok(SecretSource { informer })
+        let api: Api<Secret> = Api::all(client);
+        let list_params = ListParams::default().fields("type=kubernetes.io/tls");
+        Ok(SecretSource { api, list_params })
     }
 
     async fn event_loop<'a, T: Destination + Send + Sync>(
         &'a self,
         destination: &'a T,
-        secret: WatchEvent<Secret>,
+        secret: Secret,
     ) -> anyhow::Result<()> {
         if let Some(cert) = self.filter_certificate(secret)? {
             info!(
@@ -71,31 +69,26 @@ impl SecretSource {
         Ok(())
     }
 
-    fn filter_certificate(&self, ev: WatchEvent<Secret>) -> anyhow::Result<Option<TLS>> {
-        match ev {
-            WatchEvent::Added(secret) | WatchEvent::Modified(secret) => {
-                let secret_name = SecretSource::get_name_from_secret(&secret);
-                let secret_namespace = SecretSource::get_namespace_from_secret(&secret);
-                info!("Pick certificate {}:{}", secret_namespace, secret_name);
-                match secret.data {
-                    Some(data) => {
-                        let tls = TLS::try_from(data)?;
-                        info!(
-                            "Received cert from secret {}:{}",
-                            secret_namespace, secret_name
-                        );
-                        Ok(Some(tls))
-                    }
-                    None => {
-                        warn!(
-                            "No data found in secret {}:{}",
-                            secret_namespace, secret_name
-                        );
-                        Ok(None)
-                    }
-                }
+    fn filter_certificate(&self, secret: Secret) -> anyhow::Result<Option<TLS>> {
+        let secret_name = SecretSource::get_name_from_secret(&secret);
+        let secret_namespace = SecretSource::get_namespace_from_secret(&secret);
+        info!("Pick certificate {}:{}", secret_namespace, secret_name);
+        match secret.data {
+            Some(data) => {
+                let tls = TLS::try_from(data)?;
+                info!(
+                    "Received cert from secret {}:{}",
+                    secret_namespace, secret_name
+                );
+                Ok(Some(tls))
             }
-            _ => Ok(None),
+            None => {
+                warn!(
+                    "No data found in secret {}:{}",
+                    secret_namespace, secret_name
+                );
+                Ok(None)
+            }
         }
     }
 
