@@ -2,8 +2,8 @@ apiVersion: v2
 name: cert-sync
 description: Synchronize your Kubernetes TLS Secrets to external provider
 type: application
-version: 0.1.0
-appVersion: 0.1.0
+version: {{version}}
+appVersion: {{version}}
 keywords:
   - kubernetes
   - certificate
