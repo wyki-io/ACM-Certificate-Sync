@@ -3,7 +3,7 @@ use super::TLS;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::{TryStreamExt};
+use futures::TryStreamExt;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
 use kube::{
