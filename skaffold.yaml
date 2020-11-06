@@ -1,0 +1,19 @@
+apiVersion: skaffold/v2beta5
+kind: Config
+metadata:
+  name: cert-sync
+
+build:
+  artifacts:
+    - image: docker.io/wykiio/cert-sync
+  local: {}
+
+deploy:
+  helm:
+    releases:
+      - name: cert-sync
+        chartPath: chart
+        valuesFiles:
+          - values.yaml
+        artifactOverrides:
+          skaffoldImage: docker.io/wykiio/cert-sync
