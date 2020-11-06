@@ -31,6 +31,13 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
+Define the image, whether it comes from Skaffold or from values
+*/}}
+{{- define "cert-sync.image" -}}
+{{ .Values.skaffoldImage | default (printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion)) }}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "cert-sync.labels" -}}
