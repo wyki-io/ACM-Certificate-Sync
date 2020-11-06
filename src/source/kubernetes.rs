@@ -33,16 +33,19 @@ impl super::Source for SecretSource {
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
-        let watcher = watcher(self.api.clone(), self.list_params.clone());
-        let mut watcher = try_flatten_applied(watcher).boxed();
-        while let Some(secret) = watcher.try_next().await? {
-            if let Err(e) = self.event_loop(destination, secret).await {
-                error!("Error while receiving TLS : {}", e);
-            }
-            // Delay to avoid throttling on destination side
-            delay_for(Duration::from_secs(1)).await;
+        loop {
+            let watcher = watcher(self.api.clone(), self.list_params.clone());
+            try_flatten_applied(watcher)
+                .try_for_each(|secret| async move {
+                    if let Err(e) = self.handle_certificate(destination, secret).await {
+                        error!("Error while receiving TLS : {}", e);
+                    }
+                    // Delay to avoid throttling on destination side
+                    delay_for(Duration::from_secs(1)).await;
+                    Ok(())
+                })
+                .await?;
         }
-        Ok(())
     }
 }
 
@@ -54,22 +57,22 @@ impl SecretSource {
         Ok(SecretSource { api, list_params })
     }
 
-    async fn event_loop<'a, T: Destination + Send + Sync>(
+    async fn handle_certificate<'a, T: Destination + Send + Sync>(
         &'a self,
         destination: &'a T,
         secret: Secret,
     ) -> anyhow::Result<()> {
-        if let Some(cert) = self.filter_certificate(secret)? {
+        if let Some(tls) = self.convert_to_tls(secret)? {
             info!(
                 "Will try to synchronize cert with domains {}",
-                cert.domains.join(", ")
+                tls.domains.join(", ")
             );
-            destination.publish(cert).await?;
+            destination.publish(tls).await?;
         }
         Ok(())
     }
 
-    fn filter_certificate(&self, secret: Secret) -> anyhow::Result<Option<TLS>> {
+    fn convert_to_tls(&self, secret: Secret) -> anyhow::Result<Option<TLS>> {
         let secret_name = SecretSource::get_name_from_secret(&secret);
         let secret_namespace = SecretSource::get_namespace_from_secret(&secret);
         info!("Pick certificate {}:{}", secret_namespace, secret_name);
