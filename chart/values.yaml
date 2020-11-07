@@ -1,0 +1,67 @@
+replicaCount: 1
+
+image:
+  repository: wykiio/cert-sync
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+# Environment variables
+envKeyValue:
+  RUST_LOG: info
+# The config used by cert-sync
+config:
+  {}
+  # Aws related configuration
+  # aws:
+  # Region in which to store Certificates and send to ALB. Required
+  # region: eu-west-3
+  # Provide AWS credentials if you do not use IAM Roles
+  # credentials:
+  #   access_key: <access_key>
+  #   secret_key: <secret_key>
+  # Load balancers to link Certificates to. No sync to ALB if empty
+  # load_balancers:
+  #   - arn:aws:elasticloadbalancing:eu-west-3:123456789012:loadbalancer/app/my-alb/0123456789abcdef
+
+# HTTP Proxy settings
+# proxy:
+#   http: http://my.proxy:3128
+#   # If not set, will use the one from http
+#   https: http://my.proxy:3128
+#   # If you need to update the no_proxy part, add it to the existing values
+#   no: localhost,127.0.0.1,10.0.0.0/8,169.254.169.254,.svc,.local
+
+# cert-sync needs a service account and cluster role to retrieve cluster
+# certificates in read-only
+serviceAccount:
+  # Specifies whether the service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+clusterRole:
+  # Specifies whether the cluster role should be created
+  create: true
+  # Annotations to add to the cluster role
+  annotations: {}
+  # The name of the cluster role to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
