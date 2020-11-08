@@ -1,4 +1,17 @@
 tag-prefix = ""
 tag-name = "{{version}}"
-dev-version-ext = "rc0"
+dev-version-ext = "rc.1"
 pre-release-commit-message = "Release {{version}}"
+post-release-commit-message = "Start next development iteration {{version}}"
+[[pre-release-replacements]]
+file = "./chart/Chart.yaml"
+search = "version: [0-9]+.[0-9]+.[0-9]+.*"
+replace = "version: {{version}}"
+exactly = 1
+prerelease = true
+[[pre-release-replacements]]
+file = "./chart/Chart.yaml"
+search = "appVersion: [0-9]+.[0-9]+.[0-9]+.*"
+replace = "appVersion: {{version}}"
+exactly = 1
+prerelease = true

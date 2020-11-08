@@ -1,6 +1,6 @@
-on: [push, pull_request]
+name: Rust checks and tests
 
-name: Continuous integration
+on: [pull_request]
 
 jobs:
   check:

@@ -2,8 +2,8 @@ apiVersion: v2
 name: cert-sync
 description: Synchronize your Kubernetes TLS Secrets to external provider
 type: application
-version: {{version}}
-appVersion: {{version}}
+version: 0.1.0-rc.21
+appVersion: 0.1.0-rc.21
 keywords:
   - kubernetes
   - certificate
@@ -18,4 +18,3 @@ sources:
 maintainers:
   - name: Wyki
     email: contact@wyki.io
-
