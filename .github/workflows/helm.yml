@@ -1,0 +1,74 @@
+name: Helm chart lint, test and dispatch
+
+on:
+  push:
+    tags:
+      - '*'
+    paths:
+      - 'charts/**'
+
+jobs:
+  lint-chart:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Run chart-testing (lint)
+        id: lint
+        uses: helm/chart-testing-action@v1.1.0
+        with:
+          command: lint
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.0.0
+        if: steps.lint.outputs.changed == 'true'
+
+      - name: Run chart-testing (install)
+        uses: helm/chart-testing-action@v1.1.0
+        with:
+          command: install
+
+  notify-helm-repository-dev:
+    name: Notify Helm repository (dev)
+    needs: lint-chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.HELM_REPO_DEV_TOKEN }}
+          repository: wyki-io/helm-charts-dev
+          event-type: notify-helm-repository
+          client-payload: |
+            {
+              "repository": "${{ github.repository }}",
+              "ref": "${{ github.ref }}"
+            }
+
+  notify-helm-repository:
+    name: Notify Helm repository
+    needs: lint-chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check tag
+        id: check-tag
+        run: |
+          if [[ ${{ github.event.ref }} =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo ::set-output name=match::true
+          fi
+      - name: Send repository dispatch
+        uses: peter-evans/repository-dispatch@v1
+        if: steps.check-tag.outputs.match == 'true'
+        with:
+          token: ${{ secrets.HELM_REPO_TOKEN }}
+          repository: wyki-io/helm-charts
+          event-type: notify-helm-repository
+          client-payload: |
+            {
+              "repository": "${{ github.repository }}",
+              "ref": "${{ github.ref }}"
+            }

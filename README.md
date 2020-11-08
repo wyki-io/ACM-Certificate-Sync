@@ -41,6 +41,12 @@ aws:
     - arn:aws:elasticloadbalancing:eu-west-3:123456789012:loadbalancer/app/name-alt/1234567890abcdee
 ```
 
+## Version upgrade
+
+This project version bump is managed by `cargo-release`.
+
+Install it with `cargo install cargo-release`.
+
 ## Notes
 
 - Using RSA length different than 2048 will cause ACM to not list those
