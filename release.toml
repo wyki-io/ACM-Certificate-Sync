@@ -2,7 +2,7 @@ tag-prefix = ""
 tag-name = "{{version}}"
 dev-version-ext = "rc.1"
 pre-release-commit-message = "Release {{version}}"
-post-release-commit-message = "Start next development iteration {{version}}"
+post-release-commit-message = "Start next development iteration {{next_version}}"
 [[pre-release-replacements]]
 file = "./chart/Chart.yaml"
 search = "version: [0-9]+.[0-9]+.[0-9]+.*"
