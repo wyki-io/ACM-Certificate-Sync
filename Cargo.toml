@@ -1,6 +1,6 @@
 [package]
 name = "cert-sync"
-version = "0.1.0-rc.21"
+version = "0.1.0"
 authors = ["Wykiki <wykiki@wyki.io>"]
 edition = "2018"
 keywords = ["kubernetes", "certificate", "tls", "ssl", "aws", "acm", "alb", "elb"]
