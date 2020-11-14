@@ -58,8 +58,6 @@ jobs:
         with:
           name: application
           path: target/release
-      - name: Display structure of downloaded files
-        run: ls -lahR
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v2
