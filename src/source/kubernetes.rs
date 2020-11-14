@@ -3,7 +3,7 @@ use super::TLS;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
 use kube::{
@@ -35,16 +35,14 @@ impl super::Source for SecretSource {
     ) -> anyhow::Result<()> {
         loop {
             let watcher = watcher(self.api.clone(), self.list_params.clone());
-            try_flatten_applied(watcher)
-                .try_for_each(|secret| async move {
-                    if let Err(e) = self.handle_certificate(destination, secret).await {
-                        error!("Error while receiving TLS : {}", e);
-                    }
-                    // Delay to avoid throttling on destination side
-                    delay_for(Duration::from_secs(1)).await;
-                    Ok(())
-                })
-                .await?;
+            let mut w = try_flatten_applied(watcher).boxed();
+            while let Some(secret) = w.try_next().await? {
+                if let Err(e) = self.handle_certificate(destination, secret).await {
+                    error!("Error while receiving TLS : {}", e);
+                }
+                // Delay to avoid throttling on destination side
+                delay_for(Duration::from_secs(1)).await;
+            }
         }
     }
 }
