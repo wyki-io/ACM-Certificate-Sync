@@ -25,7 +25,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-cert-sync-release
       - name: Build application in release mode
         run:  cargo build --release
       - name: Upload application binary
@@ -58,6 +58,8 @@ jobs:
         with:
           name: application
           path: target/release
+      - name: Display structure of downloaded files
+        run: ls -lahR
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v2
