@@ -28,11 +28,12 @@ struct AwsRootConfig {
     aws: AcmAlbConfig,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 struct AcmAlbConfig {
     region: Region,
     credentials: Option<AcmAlbCredentials>,
     load_balancers: Option<Vec<String>>,
+    dry_run: bool
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -231,8 +232,12 @@ impl AcmAlbDestination {
         }
 
         // Send the cert
-        let cert_res = self.acm_client.import_certificate(cert_req).await?;
-        Ok(cert_res)
+        if self.config.dry_run {
+            Err(anyhow!("Dry-run enabled, not sending request to AWS"))
+        } else {
+            let cert_res = self.acm_client.import_certificate(cert_req).await?;
+            Ok(cert_res)
+        }
     }
 
     async fn link_to_alb_listeners(
@@ -243,6 +248,9 @@ impl AcmAlbDestination {
         let mut certificate = Certificate::default();
         certificate.certificate_arn = Some(cert_arn);
         let certificates = vec![certificate];
+        if self.config.dry_run {
+            return Ok(())
+        }
         for listener_arn in listeners_arn {
             let mut request = AddListenerCertificatesInput::default();
             request.listener_arn = listener_arn.clone();
