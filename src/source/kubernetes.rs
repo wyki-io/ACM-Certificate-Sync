@@ -33,15 +33,17 @@ impl super::Source for SecretSource {
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
+        let watcher = watcher(self.api.clone(), self.list_params.clone());
+        let mut w = try_flatten_applied(watcher).boxed();
         loop {
-            let watcher = watcher(self.api.clone(), self.list_params.clone());
-            let mut w = try_flatten_applied(watcher).boxed();
-            while let Some(secret) = w.try_next().await? {
-                if let Err(e) = self.handle_certificate(destination, secret).await {
-                    error!("Error while receiving TLS : {}", e);
+            while let Ok(res) = w.try_next().await {
+                if let Some(secret) = res {
+                    if let Err(e) = self.handle_certificate(destination, secret).await {
+                        error!("Error while receiving TLS : {}", e);
+                    }
+                    // Delay to avoid throttling on destination side
+                    delay_for(Duration::from_secs(1)).await;
                 }
-                // Delay to avoid throttling on destination side
-                delay_for(Duration::from_secs(1)).await;
             }
         }
     }
