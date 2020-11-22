@@ -204,8 +204,9 @@ impl AcmAlbDestination {
             cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
         }
 
-        let default_domain = String::from("");
-        let main_domain = new_cert.domains.get(0).unwrap_or(&default_domain);
+        let main_domain = new_cert.domains.get(0).ok_or(
+            anyhow!("Certificate does not contain any domain name, not uploading to ACM")
+        )?;
         let mut tag_name = Tag::default();
         tag_name.key = String::from("Name");
         tag_name.value = Some(main_domain.clone());

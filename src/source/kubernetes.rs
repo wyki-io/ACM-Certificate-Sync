@@ -41,8 +41,6 @@ impl super::Source for SecretSource {
                     if let Err(e) = self.handle_certificate(destination, secret).await {
                         error!("Error while receiving TLS : {}", e);
                     }
-                    // Delay to avoid throttling on destination side
-                    delay_for(Duration::from_secs(1)).await;
                 }
             }
         }
@@ -67,7 +65,12 @@ impl SecretSource {
                 "Will try to synchronize cert with domains {}",
                 tls.domains.join(", ")
             );
+            if tls.domains.is_empty() {
+                Err(anyhow!("No domains in the TLS object, skipping"))?
+            }
             destination.publish(tls).await?;
+            // Delay to avoid throttling on destination side
+            delay_for(Duration::from_secs(1)).await;
         }
         Ok(())
     }
