@@ -36,8 +36,8 @@ impl super::Source for SecretSource {
         let watcher = watcher(self.api.clone(), self.list_params.clone());
         let mut w = try_flatten_applied(watcher).boxed();
         loop {
-            while let Ok(res) = w.try_next().await {
-                if let Some(secret) = res {
+            if let Some(opt) = w.next().await {
+                if let Ok(secret) = opt {
                     if let Err(e) = self.handle_certificate(destination, secret).await {
                         error!("Error while receiving TLS : {}", e);
                     }
