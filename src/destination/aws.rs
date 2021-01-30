@@ -262,35 +262,13 @@ impl AcmAlbDestination {
     }
 }
 
-/// Get config from file
 fn parse_config(config_str: &str) -> anyhow::Result<AcmAlbConfig> {
     let config_from_file: AwsRootConfig = serde_yaml::from_str(config_str)?;
     let config = config_from_file.aws;
 
-    debug!("Config : {:?}", config);
-    // Set region from env if it exists
-    // if let Some(env_region) = option_env!("AWS_REGION") {
-    //     if let Ok(region) = Region::from_str(env_region) {
-    //         config.region = region
-    //     }
-    // }
-
-    // // Set credentials from env if it exists
-    // set_credentials_from_env(&mut config)?;
+    debug!("AcmAlbConfig : {:?}", config);
     Ok(config)
 }
-
-// fn set_credentials_from_env(config: &mut AcmAlbConfig) -> anyhow::Result<()> {
-//     if let Some(env_cred_access) = option_env!("AWS_CREDENTIALS_ACCESS_KEY") {
-//         match config.credentials {
-//             Some(&mut creds) => (),
-//             None => config.credentials = AcmAlbCredentials {}
-//         }
-//         if let Some(env_cred_secret) = option_env!("AWS_CREDENTIALS_SECRET_KEY") {
-//         }
-//     }
-//     Ok(())
-// }
 
 #[cfg(test)]
 mod tests {
