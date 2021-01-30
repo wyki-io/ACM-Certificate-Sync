@@ -3,6 +3,9 @@
 This project aims to synchronize certificates between a source and a
 destination.
 
+**UNMAINTAINED** : This project is no longer maintained, as some AWS limitations
+just put an end to the goals of it.
+
 The example use case is :
 
 - a Kubernetes cluster behind AWS ALB
