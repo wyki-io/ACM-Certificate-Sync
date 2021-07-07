@@ -10,6 +10,11 @@ data:
     aws:
       region:
         - {{ required "config.aws.region required if using aws destination"  .region }}
+      {{- if .dry_run }}
+      dry_run: true
+      {{- else }}
+      dry_run: false
+      {{- end }}
       {{- with .credentials }}
       credentials:
         access_key: {{ required "config.aws.credentials.access_key required if not using IAM Role" .access_key }}

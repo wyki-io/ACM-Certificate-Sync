@@ -8,5 +8,6 @@ RUN apt update && \
 
 WORKDIR /app
 COPY target/release/cert-sync ./cert-sync
+RUN chmod +x ./cert-sync
 
 CMD ["./cert-sync"]

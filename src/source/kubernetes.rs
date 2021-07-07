@@ -3,7 +3,7 @@ use super::TLS;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::TryStreamExt;
+use futures::StreamExt;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::ByteString;
 use kube::{
@@ -12,13 +12,27 @@ use kube::{
 };
 use kube_runtime::utils::try_flatten_applied;
 use kube_runtime::watcher;
+use regex::Regex;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str;
+use serde::{Deserialize, Serialize};
 
 use tokio::time::{delay_for, Duration};
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct SecretRootConfig {
+    kubernetes: SecretConfig,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct SecretConfig {
+    domain_regex: Option<String>,
+}
+
 pub struct SecretSource {
+    config: SecretConfig,
+    domain_regex: Option<Regex>,
     api: Api<Secret>,
     list_params: ListParams,
 }
@@ -33,28 +47,32 @@ impl super::Source for SecretSource {
         &'a self,
         destination: &'a T,
     ) -> anyhow::Result<()> {
+        let watcher = watcher(self.api.clone(), self.list_params.clone());
+        let mut w = try_flatten_applied(watcher).boxed();
         loop {
-            let watcher = watcher(self.api.clone(), self.list_params.clone());
-            try_flatten_applied(watcher)
-                .try_for_each(|secret| async move {
+            if let Some(opt) = w.next().await {
+                if let Ok(secret) = opt {
                     if let Err(e) = self.handle_certificate(destination, secret).await {
                         error!("Error while receiving TLS : {}", e);
                     }
-                    // Delay to avoid throttling on destination side
-                    delay_for(Duration::from_secs(1)).await;
-                    Ok(())
-                })
-                .await?;
+                }
+            }
         }
     }
 }
 
 impl SecretSource {
-    pub async fn new(_config: &str) -> anyhow::Result<Self> {
+    pub async fn new(config: &str) -> anyhow::Result<Self> {
+        let config = Self::parse_config(config)?;
+        let domain_regex = if let Some(regex_str) = config.domain_regex.clone() {
+            Some(Regex::new(regex_str.as_ref())?)
+        } else {
+            None
+        };
         let client = Client::try_default().await?;
         let api: Api<Secret> = Api::all(client);
         let list_params = ListParams::default().fields("type=kubernetes.io/tls");
-        Ok(SecretSource { api, list_params })
+        Ok(Self { config, domain_regex, api, list_params })
     }
 
     async fn handle_certificate<'a, T: Destination + Send + Sync>(
@@ -63,11 +81,19 @@ impl SecretSource {
         secret: Secret,
     ) -> anyhow::Result<()> {
         if let Some(tls) = self.convert_to_tls(secret)? {
+            if !self.certificate_match_filter(&tls) {
+                return Ok(())
+            }
             info!(
                 "Will try to synchronize cert with domains {}",
                 tls.domains.join(", ")
             );
+            if tls.domains.is_empty() {
+                Err(anyhow!("No domains in the TLS object, skipping"))?
+            }
             destination.publish(tls).await?;
+            // Delay to avoid throttling on destination side
+            delay_for(Duration::from_secs(1)).await;
         }
         Ok(())
     }
@@ -107,6 +133,26 @@ impl SecretSource {
             Some(ref namespace) => namespace.clone(),
             None => String::from(""),
         }
+    }
+
+    fn parse_config(config_str: &str) -> anyhow::Result<SecretConfig> {
+        let config_from_file: SecretRootConfig = serde_yaml::from_str(config_str)?;
+        let config = config_from_file.kubernetes;
+
+        debug!("SecretConfig : {:?}", config);
+        Ok(config)
+    }
+
+    fn certificate_match_filter(&self, tls: &TLS) -> bool {
+        if let Some(regex) = &self.domain_regex {
+            for domain in &tls.domains {
+                if regex.is_match(domain) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        true
     }
 }
 

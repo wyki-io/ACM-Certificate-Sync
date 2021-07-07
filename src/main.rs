@@ -3,8 +3,10 @@ extern crate log;
 
 use anyhow::anyhow;
 use cert_sync::{AcmAlbDestination, SecretSource, Source};
-use std::io::prelude::*;
+use signal_hook::{iterator::Signals, SIGTERM};
+use std::thread;
 use std::{fs::File, path::Path};
+use std::{io::prelude::*, process::exit};
 
 fn retrieve_config() -> anyhow::Result<String> {
     let config_path_default = String::from("./config/config.yml");
@@ -22,8 +24,21 @@ fn retrieve_config() -> anyhow::Result<String> {
     Ok(content)
 }
 
+async fn signal_handling() -> anyhow::Result<()> {
+    let signals = Signals::new(&[SIGTERM])?;
+
+    thread::spawn(move || {
+        for sig in signals.forever() {
+            warn!("Received signal {}, terminating program...", sig);
+            exit(0)
+        }
+    });
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    signal_handling().await?;
     env_logger::init();
     let config = retrieve_config()?;
     let source = SecretSource::new(&config).await?;

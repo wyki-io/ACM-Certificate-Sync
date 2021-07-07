@@ -22,6 +22,7 @@ jobs:
         uses: helm/chart-testing-action@v1.1.0
         with:
           command: lint
+          config: .github/config/ct.yml
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.0.0
@@ -31,6 +32,7 @@ jobs:
         uses: helm/chart-testing-action@v1.1.0
         with:
           command: install
+          config: .github/config/ct.yml
 
   notify-helm-repository-dev:
     name: Notify Helm repository (dev)

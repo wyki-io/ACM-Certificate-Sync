@@ -28,11 +28,12 @@ struct AwsRootConfig {
     aws: AcmAlbConfig,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 struct AcmAlbConfig {
     region: Region,
     credentials: Option<AcmAlbCredentials>,
     load_balancers: Option<Vec<String>>,
+    dry_run: bool
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -203,8 +204,9 @@ impl AcmAlbDestination {
             cert_req.certificate_chain = Some(Bytes::from(new_cert.chain.join("\n")));
         }
 
-        let default_domain = String::from("");
-        let main_domain = new_cert.domains.get(0).unwrap_or(&default_domain);
+        let main_domain = new_cert.domains.get(0).ok_or(
+            anyhow!("Certificate does not contain any domain name, not uploading to ACM")
+        )?;
         let mut tag_name = Tag::default();
         tag_name.key = String::from("Name");
         tag_name.value = Some(main_domain.clone());
@@ -231,8 +233,12 @@ impl AcmAlbDestination {
         }
 
         // Send the cert
-        let cert_res = self.acm_client.import_certificate(cert_req).await?;
-        Ok(cert_res)
+        if self.config.dry_run {
+            Err(anyhow!("Dry-run enabled, not sending request to AWS"))
+        } else {
+            let cert_res = self.acm_client.import_certificate(cert_req).await?;
+            Ok(cert_res)
+        }
     }
 
     async fn link_to_alb_listeners(
@@ -243,6 +249,9 @@ impl AcmAlbDestination {
         let mut certificate = Certificate::default();
         certificate.certificate_arn = Some(cert_arn);
         let certificates = vec![certificate];
+        if self.config.dry_run {
+            return Ok(())
+        }
         for listener_arn in listeners_arn {
             let mut request = AddListenerCertificatesInput::default();
             request.listener_arn = listener_arn.clone();
@@ -253,35 +262,13 @@ impl AcmAlbDestination {
     }
 }
 
-/// Get config from file
 fn parse_config(config_str: &str) -> anyhow::Result<AcmAlbConfig> {
     let config_from_file: AwsRootConfig = serde_yaml::from_str(config_str)?;
     let config = config_from_file.aws;
 
-    debug!("Config : {:?}", config);
-    // Set region from env if it exists
-    // if let Some(env_region) = option_env!("AWS_REGION") {
-    //     if let Ok(region) = Region::from_str(env_region) {
-    //         config.region = region
-    //     }
-    // }
-
-    // // Set credentials from env if it exists
-    // set_credentials_from_env(&mut config)?;
+    debug!("AcmAlbConfig : {:?}", config);
     Ok(config)
 }
-
-// fn set_credentials_from_env(config: &mut AcmAlbConfig) -> anyhow::Result<()> {
-//     if let Some(env_cred_access) = option_env!("AWS_CREDENTIALS_ACCESS_KEY") {
-//         match config.credentials {
-//             Some(&mut creds) => (),
-//             None => config.credentials = AcmAlbCredentials {}
-//         }
-//         if let Some(env_cred_secret) = option_env!("AWS_CREDENTIALS_SECRET_KEY") {
-//         }
-//     }
-//     Ok(())
-// }
 
 #[cfg(test)]
 mod tests {
